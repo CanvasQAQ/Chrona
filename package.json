@@ -1,7 +1,11 @@
 {
   "name": "chrona",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "An interactive timing diagram editor for hardware engineers.",
+  "author": {
+    "name": "CanvasQAQ",
+    "email": "CanvasQAQ@users.noreply.github.com"
+  },
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
