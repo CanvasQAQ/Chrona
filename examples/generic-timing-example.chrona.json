@@ -1,0 +1,190 @@
+{
+  "version": 2,
+  "name": "Generic Timing Example",
+  "durationPs": 12000,
+  "constraintDraft": {
+    "setupPs": 180,
+    "holdPs": 120,
+    "status": "awaiting-definition"
+  },
+  "signals": [
+    {
+      "id": "example-clk",
+      "kind": "clock",
+      "name": "CLK",
+      "periodPs": 1000,
+      "phasePs": 0,
+      "dutyCycle": 0.5,
+      "startPs": 0,
+      "visible": true,
+      "color": "#8b7cff"
+    },
+    {
+      "id": "example-reset",
+      "kind": "data",
+      "name": "RESET_N",
+      "periodPs": 1000,
+      "pattern": ["0", "0", "1", "1", "1", "1", "1", "1", "1", "1", "1", "1"],
+      "patternSegments": [
+        {
+          "id": "reset-logic",
+          "kind": "logic",
+          "values": "001111111111",
+          "repeat": 1
+        }
+      ],
+      "startPs": 0,
+      "visible": true,
+      "color": "#f47d62"
+    },
+    {
+      "id": "example-aux-clock",
+      "kind": "clock",
+      "name": "AUX_CLK",
+      "periodPs": 500,
+      "phasePs": 125,
+      "dutyCycle": 0.5,
+      "startPs": 2000,
+      "visible": true,
+      "color": "#ffb45c"
+    },
+    {
+      "id": "example-data-bus",
+      "kind": "data",
+      "name": "DATA_BUS",
+      "periodPs": 500,
+      "pattern": ["PREAMBLE", "X", "X", "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "Z", "Z", "IDLE", "IDLE"],
+      "patternSegments": [
+        {
+          "id": "data-preamble",
+          "kind": "symbols",
+          "values": "PREAMBLE",
+          "repeat": 1
+        },
+        {
+          "id": "data-unknown",
+          "kind": "logic",
+          "values": "XX",
+          "repeat": 1
+        },
+        {
+          "id": "data-payload",
+          "kind": "range",
+          "prefix": "D",
+          "from": 0,
+          "to": 7,
+          "step": 1,
+          "repeat": 1
+        },
+        {
+          "id": "data-high-z",
+          "kind": "logic",
+          "values": "Z",
+          "repeat": 2
+        },
+        {
+          "id": "data-idle",
+          "kind": "symbols",
+          "values": "IDLE",
+          "repeat": 2
+        }
+      ],
+      "startPs": 1500,
+      "visible": true,
+      "color": "#35d6b4"
+    },
+    {
+      "id": "example-state",
+      "kind": "data",
+      "name": "STATE",
+      "periodPs": 2000,
+      "pattern": ["IDLE", "ACTIVE", "WAIT", "WAIT", "IDLE", "IDLE"],
+      "patternSegments": [
+        {
+          "id": "state-symbols",
+          "kind": "symbols",
+          "values": "IDLE ACTIVE WAIT WAIT IDLE IDLE",
+          "repeat": 1
+        }
+      ],
+      "startPs": 0,
+      "visible": true,
+      "color": "#4db7ff"
+    },
+    {
+      "id": "example-index",
+      "kind": "data",
+      "name": "INDEX",
+      "periodPs": 2000,
+      "pattern": ["I0", "I1", "I2", "I3", "I4", "I5"],
+      "patternSegments": [
+        {
+          "id": "index-range",
+          "kind": "range",
+          "prefix": "I",
+          "from": 0,
+          "to": 5,
+          "step": 1,
+          "repeat": 1
+        }
+      ],
+      "startPs": 0,
+      "visible": true,
+      "color": "#f277a8"
+    },
+    {
+      "id": "example-valid",
+      "kind": "data",
+      "name": "VALID",
+      "periodPs": 1000,
+      "pattern": ["0", "0", "1", "1", "1", "1", "1", "1", "0", "0", "0", "0"],
+      "patternSegments": [
+        {
+          "id": "valid-logic",
+          "kind": "logic",
+          "values": "001111110000",
+          "repeat": 1
+        }
+      ],
+      "startPs": 0,
+      "visible": true,
+      "color": "#67c96f"
+    },
+    {
+      "id": "example-ready",
+      "kind": "data",
+      "name": "READY",
+      "periodPs": 1000,
+      "pattern": ["0", "0", "0", "1", "0", "1", "1", "1", "1", "1", "1", "1"],
+      "patternSegments": [
+        {
+          "id": "ready-logic",
+          "kind": "logic",
+          "values": "000101111111",
+          "repeat": 1
+        }
+      ],
+      "startPs": 0,
+      "visible": true,
+      "color": "#52c7d9"
+    },
+    {
+      "id": "example-mask",
+      "kind": "data",
+      "name": "MASK",
+      "periodPs": 1000,
+      "pattern": ["0", "0", "1", "0", "0", "0", "1", "0", "0", "0", "1", "0"],
+      "patternSegments": [
+        {
+          "id": "mask-logic",
+          "kind": "logic",
+          "values": "001000100010",
+          "repeat": 1
+        }
+      ],
+      "startPs": 0,
+      "visible": true,
+      "color": "#b08cff"
+    }
+  ]
+}
