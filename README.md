@@ -29,6 +29,24 @@ npm test
 npm run build
 ```
 
+## 桌面安装包
+
+GitHub Actions 会在提交到 `main`、向 `main` 提交 Pull Request，或手动触发工作流时，
+自动构建以下安装包，并保留为工作流产物：
+
+- Windows x64（NSIS `.exe`）
+- Linux x64（`.AppImage` 和 `.deb`）
+- macOS Intel 与 Apple Silicon（`.dmg`）
+
+创建并推送以 `v` 开头的 Git 标签（例如 `v0.1.0`）后，工作流还会自动创建
+GitHub Release，并把以上安装包上传到该 Release。
+
+本地构建 Linux 安装包：
+
+```bash
+npm run package:linux
+```
+
 ## 交互设计
 
 - [V1 交互修订说明](docs/INTERACTION_SPEC.md)
