@@ -128,7 +128,7 @@ Lock 已删除。
 - 所有 Signal 始终使用同一个轨道高度，不提供单轨独立高度
 - 初始轨道高度与最小高度均为 48 px，使默认画布保持紧凑
 - Clock 振幅和 Data Symbol 高度随轨道高度连续变化
-- 不设置最大轨道高度
+- Canvas Settings 可直接输入 48–160 px；`Shift + Mouse Wheel` 使用相同范围
 
 ### 6.4 项目时长与 SVG 导出
 
@@ -138,17 +138,58 @@ Lock 已删除。
 - 自定义范围必须满足 End 大于 Start，并限制在项目总时长内
 - 导出继续包含当前可见 Signal 的名称与波形，Signal 列使用当前自动或手动宽度
 
-## 7. Setup/Hold 与动画
+## 7. Signal Delay、Setup/Hold 与反馈
 
-旧版从左向右扫描的 Timing Sweep 已删除，不作为兼容目标。
+Signal Timing 用于制作能够解释 Delay 和约束关系的 Timing Diagram 和 SVG，不承担自动定位问题、路径排名或 STA 报告职责。
 
-Setup/Hold 计算与动画暂缓，等待重新定义：
+### 7.1 基础波形与边沿联动
 
-- Clock/Data 不确定性模型
-- Min/Max Delay
-- Delay 分布或边界
-- Sampling Edge
-- Violation 判定
-- 动画如何展示不同 Delay 对 Margin 的影响
+- Signal 的 Start、Period、Phase 和 Pattern 先生成基础波形
+- 用户先选中目标 Signal，再为它添加 Source Delay
+- 每条关系分别指定任意类型的 Source Signal/edge，以及当前目标 Signal/edge
+- 每条 Edge Delay 保存 Min、Current 和 Max
+- 每条 Delay 保存独立的 Diagram Label；新建关系按 `t1`、`t2`、`t3` 自动命名，用户可改为任意短名称
+- 选中的边沿是计算锚点：目标锚点时间等于 Source edge 时间加 Current Delay
+- 锚点结果被换算为目标 Signal 的派生 Start offset，目标整条波形随之平移，而不是只推动一个边沿
+- Delay 不覆盖目标 Signal 保存的基础 Start，也不自动生成新的 Signal
+- Source 与 Target 均不受 Clock/Data 类型组合限制；Clock 可以源自 Data，Data 也可以源自 Clock
+- 当一条关系的 Target 又是另一条关系的 Source 时，后一级使用已经平移后的 Source edge，实时传播两级 Delay
 
-在语义确认前，UI 不显示可能产生误导的 Pass/Violation 结果。
+Delay 配置附着在目标 Signal，而不是项目级 Clock/Data 配对。工程文件用 `delayLinks[]` 保存每个目标 Signal 的来源、边沿序号和 Delay 范围。
+
+### 7.2 Min/Max 表达
+
+Min/Max 只在目标 Signal 轨道显示为低对比度虚线边界：
+
+- 不显示 Min/Max 文字标签
+- 不使用高饱和状态颜色
+- Current edge 仍由正常波形实线表达
+- 边界和 Delay 测量线随 SVG 一起导出
+- Delay 测量线在画布和 SVG 中显示 Diagram Label，实际 Current Delay 保留为该图形元素的提示信息
+
+### 7.3 Setup/Hold Window
+
+Setup/Hold Constraint 同样从当前选中的目标 Signal 添加，并独立于 Delay：
+
+- 用户选择任意类型的 Reference Signal，并分别设置 Reference 与 Constrained 的边沿类型
+- Clock 支持 Rising、Falling 或 Both；Data 支持 Any transition，并对逻辑 0/1 支持 Rising/Falling
+- Reference 与 Constrained 两侧都支持多选边沿编号；编号留空表示全部可见边沿
+- 每个被选择的 Reference edge 生成一个 Window，Window 随该 edge（包括其派生 Delay）实时移动
+- Setup 位于 Reference edge 左侧，Hold 位于右侧
+- 新建约束的 Setup 与 Hold 默认值均为 10 ps
+- 正常时使用统一的中性、低对比度区域，不分别着色
+- 不显示 Sampling Edge、Overlap、Pass 或 Violation 文本
+- 任一被选择的 Constrained edge 进入某个 Window 时，仅该 Window 切换为浅色、半透明红色，作为图形反馈
+- 工程文件用 `timingConstraints[]` 保存约束，不要求 Reference 或 Target 必须是 Clock/Data 中的特定一种
+
+### 7.4 轨道间距、起点与网格
+
+- Signal 轨道默认和最小高度为 48 px，波形主体只占轨道中部约 44%
+- Canvas Settings 显示当前 Track Height 数值，允许在 48–160 px 之间直接输入；该值与 Shift + 滚轮调整实时同步并随工程保存
+- Data Signal 在有效 Start 之前显示低对比度的连续引导线，并在 Start 位置显示竖向起点线；该表达随 SVG 导出
+- 画布工具栏右侧提供 Vertical Grid 设置，可隐藏纵向网格
+- Grid 支持跟随当前参考 Signal 自动细分，或使用自定义 ps 间隔
+
+### 7.5 Delay 动画
+
+旧版从左向右扫描的 Timing Sweep 已删除，不作为兼容目标。新的动态效果由用户调整各 Signal 的 Current Delay 产生；动画或拖动只改变 Delay 参数和渲染时的派生 Start offset，不覆盖 Signal 的基础时序数据。

@@ -8,6 +8,7 @@ import {
   Select,
   SegmentedControl,
   Slider,
+  Switch,
   TextInput,
   Tooltip,
   UnstyledButton,
@@ -28,7 +29,6 @@ import {
   FolderOpen,
   GripVertical,
   Grid2X2,
-  Info,
   Layers3,
   Minus,
   Moon,
@@ -36,6 +36,7 @@ import {
   Save,
   ScanLine,
   Search,
+  Settings2,
   Square,
   Sun,
   Trash2,
@@ -56,22 +57,28 @@ import {
 import { ConvertibleTimeInput } from "./components/ConvertibleTimeInput";
 import { DataPatternEditor } from "./components/DataPatternEditor";
 import { RateInput } from "./components/RateInput";
+import { SignalTimingEditor } from "./components/SignalTimingEditor";
 import chronaIcon from "./assets/chrona.png";
 import {
   buildPeriodGrid,
   clockWavePoints,
   colorForDataToken,
   patternForDataSignal,
+  resolveDelayLinks,
+  resolveTimingConstraint,
+  type EdgeDelayLink,
   type ClockSignal,
   type DataPatternSegment,
   type DataSignal,
   type Signal,
   type SignalGroup,
   type TimingProject,
+  type TimingConstraint,
   type WavePoint,
 } from "./domain/timing";
 
 const MIN_TRACK_HEIGHT = 48;
+const MAX_TRACK_HEIGHT = 160;
 const AXIS_HEIGHT = 42;
 const CANVAS_GUTTER = 18;
 const DEFAULT_LABEL_WIDTH = 196;
@@ -79,16 +86,25 @@ const MIN_LABEL_WIDTH = 136;
 const MAX_LABEL_WIDTH = 420;
 const CANVAS_BASE_WIDTH = 1120;
 const SIGNAL_COLORS = ["#8b7cff", "#35d6b4", "#ffb45c", "#4db7ff", "#f277a8"];
+const DEFAULT_CANVAS_SETTINGS = {
+  showVerticalGrid: true,
+  gridMode: "auto" as const,
+  gridIntervalPs: 250,
+  trackHeight: MIN_TRACK_HEIGHT,
+};
 
 const initialProject: TimingProject = {
   version: 2,
   name: "Untitled",
   durationPs: 6000,
   constraintDraft: {
-    setupPs: 180,
-    holdPs: 120,
+    setupPs: 10,
+    holdPs: 10,
     status: "awaiting-definition",
   },
+  delayLinks: [],
+  timingConstraints: [],
+  canvasSettings: DEFAULT_CANVAS_SETTINGS,
   signals: [],
 };
 
@@ -159,7 +175,7 @@ function pathForPoints(
   y: number,
   rowHeight: number,
 ): string {
-  const amplitude = Math.max(18, rowHeight - 20);
+  const amplitude = Math.max(18, rowHeight * 0.44);
   const center = y + rowHeight / 2;
   const high = center - amplitude / 2;
   const low = center + amplitude / 2;
@@ -415,7 +431,6 @@ function App() {
   const [project, setProject] = useState<TimingProject>(initialProject);
   const [selectedId, setSelectedId] = useState("");
   const [zoom, setZoom] = useState(1);
-  const [trackHeight, setTrackHeight] = useState(MIN_TRACK_HEIGHT);
   const [labelWidth, setLabelWidth] = useState(DEFAULT_LABEL_WIDTH);
   const [isLabelWidthAuto, setIsLabelWidthAuto] = useState(true);
   const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -484,7 +499,22 @@ function App() {
   const referenceClock = project.signals.find(
     (signal): signal is ClockSignal => signal.kind === "clock",
   );
+  const selectedDelayLink = selected
+    ? (project.delayLinks ?? []).find(
+        (link) => link.targetSignalId === selected.id,
+      )
+    : undefined;
+  const selectedConstraint = selected
+    ? (project.timingConstraints ?? []).find(
+        (constraint) => constraint.targetSignalId === selected.id,
+      )
+    : undefined;
   const referencePeriodPs = referenceClock?.periodPs ?? 1000;
+  const canvasSettings = project.canvasSettings ?? DEFAULT_CANVAS_SETTINGS;
+  const trackHeight = Math.min(
+    MAX_TRACK_HEIGHT,
+    Math.max(MIN_TRACK_HEIGHT, canvasSettings.trackHeight),
+  );
   const canvasWidth = CANVAS_BASE_WIDTH * zoom;
   const trackLayouts = useMemo<TrackLayout[]>(() => {
     let y = AXIS_HEIGHT;
@@ -494,20 +524,64 @@ function App() {
       return layout;
     });
   }, [trackHeight, visibleSignals]);
+  const trackLayoutBySignal = useMemo(
+    () => new Map(trackLayouts.map((layout) => [layout.signal.id, layout])),
+    [trackLayouts],
+  );
+  const resolvedDelayLinks = useMemo(
+    () =>
+      resolveDelayLinks(
+        project.signals,
+        project.durationPs,
+        project.delayLinks ?? [],
+      ),
+    [project.delayLinks, project.durationPs, project.signals],
+  );
+  const resolvedConstraints = useMemo(
+    () =>
+      (project.timingConstraints ?? []).map((constraint) => ({
+        constraint,
+        resolved: resolveTimingConstraint(
+          project.signals,
+          project.durationPs,
+          constraint,
+          resolvedDelayLinks.signalShiftsPs,
+        ),
+      })),
+    [
+      project.durationPs,
+      project.signals,
+      project.timingConstraints,
+      resolvedDelayLinks.signalShiftsPs,
+    ],
+  );
   const canvasHeight = Math.max(
     AXIS_HEIGHT +
       trackLayouts.reduce((total, track) => total + track.height, 0),
     430,
   );
   const gridPeriodPs = selected?.periodPs ?? referencePeriodPs;
+  const gridIntervalPs =
+    canvasSettings.gridMode === "custom"
+      ? Math.max(1, canvasSettings.gridIntervalPs)
+      : gridPeriodPs / 4;
   const gridMarks = useMemo(
     () =>
       buildPeriodGrid(
         project.durationPs,
-        gridPeriodPs,
+        canvasSettings.gridMode === "custom"
+          ? gridIntervalPs
+          : gridPeriodPs,
         Math.max(1, canvasWidth - CANVAS_GUTTER * 2),
+        canvasSettings.gridMode === "custom" ? 1 : 4,
       ),
-    [canvasWidth, gridPeriodPs, project.durationPs],
+    [
+      canvasSettings.gridMode,
+      canvasWidth,
+      gridIntervalPs,
+      gridPeriodPs,
+      project.durationPs,
+    ],
   );
   const timelineX = (timePs: number) =>
     CANVAS_GUTTER +
@@ -580,6 +654,31 @@ function App() {
     return rawDelta;
   };
 
+  const updateTrackHeight = useCallback(
+    (next: number | ((current: number) => number)) => {
+      setProject((current) => {
+        const settings = current.canvasSettings ?? DEFAULT_CANVAS_SETTINGS;
+        const currentHeight = Math.min(
+          MAX_TRACK_HEIGHT,
+          Math.max(MIN_TRACK_HEIGHT, settings.trackHeight),
+        );
+        const requested =
+          typeof next === "function" ? next(currentHeight) : next;
+        return {
+          ...current,
+          canvasSettings: {
+            ...settings,
+            trackHeight: Math.min(
+              MAX_TRACK_HEIGHT,
+              Math.max(MIN_TRACK_HEIGHT, requested),
+            ),
+          },
+        };
+      });
+    },
+    [],
+  );
+
   const handleCanvasWheel = useCallback((event: WheelEvent) => {
     const viewport = canvasViewportRef.current;
     if (!viewport) return;
@@ -597,9 +696,9 @@ function App() {
     if (!event.shiftKey) return;
     event.preventDefault();
     const delta = -wheelDelta * 0.22;
-    setTrackHeight((current) => Math.max(MIN_TRACK_HEIGHT, current + delta));
+    updateTrackHeight((current) => current + delta);
     setStatusMessage("All track heights adjusted");
-  }, [setAnchoredZoom]);
+  }, [setAnchoredZoom, updateTrackHeight]);
 
   useEffect(() => {
     const viewport = canvasViewportRef.current;
@@ -905,11 +1004,110 @@ function App() {
     setStatusMessage(`${signal.name} added`);
   };
 
+  const addSelectedDelay = (sourceSignalId: string) => {
+    if (!selected) return;
+    setProject((current) => {
+      const existing = (current.delayLinks ?? []).filter(
+        (link) => link.targetSignalId !== selected.id,
+      );
+      const usedLabels = new Set(
+        existing.map((link) => link.label?.trim()).filter(Boolean),
+      );
+      let labelIndex = existing.length + 1;
+      while (usedLabels.has(`t${labelIndex}`)) labelIndex += 1;
+      return {
+        ...current,
+        delayLinks: [
+          ...existing,
+          {
+            id: crypto.randomUUID(),
+            label: `t${labelIndex}`,
+            sourceSignalId,
+            targetSignalId: selected.id,
+            sourceEdge: 1,
+            targetEdge: 1,
+            minPs: 50,
+            currentPs: 100,
+            maxPs: 200,
+          },
+        ],
+      };
+    });
+    setStatusMessage(`${selected.name} source delay added`);
+  };
+
+  const updateSelectedDelay = (patch: Partial<EdgeDelayLink>) => {
+    if (!selectedDelayLink) return;
+    setProject((current) => ({
+      ...current,
+      delayLinks: (current.delayLinks ?? []).map((link) =>
+        link.id === selectedDelayLink.id ? { ...link, ...patch } : link,
+      ),
+    }));
+    setStatusMessage(`${selected?.name ?? "Signal"} delay updated`);
+  };
+
+  const addSelectedConstraint = (sourceSignalId: string) => {
+    if (!selected) return;
+    const constraint: TimingConstraint = {
+      id: crypto.randomUUID(),
+      sourceSignalId,
+      targetSignalId: selected.id,
+      sourceEdge: 1,
+      targetEdge: 1,
+      sourceEdges: [],
+      targetEdges: [],
+      sourceEdgeKind:
+        project.signals.find((signal) => signal.id === sourceSignalId)?.kind ===
+        "clock"
+          ? "rising"
+          : "transition",
+      targetEdgeKind: selected.kind === "clock" ? "rising" : "transition",
+      setupPs: project.constraintDraft.setupPs,
+      holdPs: project.constraintDraft.holdPs,
+    };
+    setProject((current) => ({
+      ...current,
+      timingConstraints: [
+        ...(current.timingConstraints ?? []).filter(
+          (item) => item.targetSignalId !== selected.id,
+        ),
+        constraint,
+      ],
+    }));
+    setStatusMessage(`${selected.name} constraint added`);
+  };
+
+  const updateSelectedConstraint = (patch: Partial<TimingConstraint>) => {
+    if (!selectedConstraint) return;
+    setProject((current) => ({
+      ...current,
+      timingConstraints: (current.timingConstraints ?? []).map((constraint) =>
+        constraint.id === selectedConstraint.id
+          ? { ...constraint, ...patch }
+          : constraint,
+      ),
+    }));
+    setStatusMessage(`${selected?.name ?? "Signal"} constraint updated`);
+  };
+
   const deleteSignal = (id: string) => {
     setProject((current) => {
       const next = current.signals.filter((signal) => signal.id !== id);
       if (id === selectedId) setSelectedId(next[0]?.id ?? "");
-      return { ...current, signals: next };
+      return {
+        ...current,
+        signals: next,
+        delayLinks: (current.delayLinks ?? []).filter(
+          (link) =>
+            link.sourceSignalId !== id && link.targetSignalId !== id,
+        ),
+        timingConstraints: (current.timingConstraints ?? []).filter(
+          (constraint) =>
+            constraint.sourceSignalId !== id &&
+            constraint.targetSignalId !== id,
+        ),
+      };
     });
     setStatusMessage("Signal removed");
   };
@@ -1074,6 +1272,38 @@ function App() {
           ...loaded,
           durationPs: Math.max(1, loaded.durationPs || initialProject.durationPs),
           signalGroups: loaded.signalGroups ?? [],
+          delayLinks: (
+            loaded.delayLinks ??
+            (loaded.linkedTiming
+              ? [loaded.linkedTiming.clock, loaded.linkedTiming.data]
+              : [])
+          ).map((link, index) => ({
+            ...link,
+            id: link.id ?? crypto.randomUUID(),
+            label: link.label?.trim() || `t${index + 1}`,
+          })),
+          timingConstraints:
+            loaded.timingConstraints ??
+            (loaded.linkedTiming
+              ? [
+                  {
+                    id: crypto.randomUUID(),
+                    sourceSignalId:
+                      loaded.linkedTiming.clock.targetSignalId,
+                    targetSignalId:
+                      loaded.linkedTiming.data.targetSignalId,
+                    sourceEdge: loaded.linkedTiming.clock.targetEdge,
+                    targetEdge: loaded.linkedTiming.data.targetEdge,
+                    setupPs: loaded.linkedTiming.setupPs,
+                    holdPs: loaded.linkedTiming.holdPs,
+                  },
+                ]
+              : []),
+          linkedTiming: undefined,
+          canvasSettings: {
+            ...DEFAULT_CANVAS_SETTINGS,
+            ...(loaded.canvasSettings ?? {}),
+          },
         };
         setProject(normalizedProject);
         setSelectedId(loaded.signals[0]?.id ?? "");
@@ -1212,6 +1442,128 @@ function App() {
         )}
       </section>
     );
+  };
+
+  const signalWithLinkedStart = (signal: Signal): Signal => {
+    const shiftPs = resolvedDelayLinks.signalShiftsPs[signal.id] ?? 0;
+    return shiftPs === 0
+      ? signal
+      : { ...signal, startPs: signal.startPs + shiftPs };
+  };
+
+  const renderDelayBackgrounds = () => {
+    return (project.delayLinks ?? []).map((link, index) => {
+      const key = link.id ?? `delay-${index}`;
+      const resolved = resolvedDelayLinks.byId[key];
+      const targetLayout = trackLayoutBySignal.get(link.targetSignalId);
+      if (!resolved || !targetLayout) return null;
+      const minX = timelineX(resolved.minTimePs);
+      const maxX = timelineX(resolved.maxTimePs);
+      return (
+        <g key={key} className="linked-delay-range" aria-hidden="true">
+          <line
+            x1={minX}
+            x2={minX}
+            y1={targetLayout.y + 5}
+            y2={targetLayout.y + targetLayout.height - 5}
+          />
+          <line
+            x1={maxX}
+            x2={maxX}
+            y1={targetLayout.y + 5}
+            y2={targetLayout.y + targetLayout.height - 5}
+          />
+        </g>
+      );
+    });
+  };
+
+  const renderConstraintWindows = () => {
+    return resolvedConstraints.map(({ constraint, resolved }) => {
+      if (!resolved) return null;
+      const sourceLayout = trackLayoutBySignal.get(constraint.sourceSignalId);
+      const targetLayout = trackLayoutBySignal.get(constraint.targetSignalId);
+      if (!sourceLayout || !targetLayout) return null;
+      return (
+        <g key={constraint.id}>
+          {resolved.windows.map((window, windowIndex) => {
+            const referenceX = timelineX(window.sourceTimePs);
+            const startX = timelineX(window.startTimePs);
+            const endX = timelineX(window.endTimePs);
+            return (
+              <g
+                key={`${constraint.id}-${windowIndex}`}
+                className={`linked-timing-window${
+                  window.isViolated ? " is-violated" : ""
+                }`}
+                aria-label={
+                  window.isViolated
+                    ? "Constrained edge is inside the timing window"
+                    : "Timing constraint window"
+                }
+              >
+                <rect
+                  x={Math.min(startX, endX)}
+                  y={targetLayout.y + 4}
+                  width={Math.abs(endX - startX)}
+                  height={Math.max(1, targetLayout.height - 8)}
+                  rx="4"
+                />
+                <line
+                  x1={referenceX}
+                  x2={referenceX}
+                  y1={Math.min(sourceLayout.y, targetLayout.y) + 4}
+                  y2={Math.max(
+                    sourceLayout.y + sourceLayout.height,
+                    targetLayout.y + targetLayout.height,
+                  ) - 4}
+                />
+              </g>
+            );
+          })}
+        </g>
+      );
+    });
+  };
+
+  const renderDelayLinks = () => {
+    return (project.delayLinks ?? []).map((link, index) => {
+      const key = link.id ?? `delay-${index}`;
+      const resolved = resolvedDelayLinks.byId[key];
+      const sourceLayout = trackLayoutBySignal.get(link.sourceSignalId);
+      const targetLayout = trackLayoutBySignal.get(link.targetSignalId);
+      if (!resolved || !sourceLayout || !targetLayout) return null;
+      const sourceX = timelineX(resolved.sourceTimePs);
+      const targetX = timelineX(resolved.targetTimePs);
+      const relationY = targetLayout.y + 8;
+      const sourceY = sourceLayout.y + sourceLayout.height / 2;
+      const targetY = targetLayout.y + targetLayout.height / 2;
+      const labelX = (sourceX + targetX) / 2;
+      const currentDelay = Math.max(
+        0,
+        resolved.targetTimePs - resolved.sourceTimePs,
+      );
+      const delayLabel = link.label?.trim() || `t${index + 1}`;
+      return (
+        <g key={key} className="linked-delay-link">
+          <title>{`${delayLabel} · ${formatAxisTime(currentDelay)}`}</title>
+          <line x1={sourceX} x2={sourceX} y1={sourceY} y2={relationY} />
+          <line x1={targetX} x2={targetX} y1={relationY} y2={targetY} />
+          <line
+            className="linked-delay-measure"
+            x1={sourceX}
+            x2={targetX}
+            y1={relationY}
+            y2={relationY}
+          />
+          <circle cx={sourceX} cy={sourceY} r="3" />
+          <circle cx={targetX} cy={targetY} r="3.5" />
+          <text x={labelX} y={relationY - 4} textAnchor="middle">
+            {delayLabel}
+          </text>
+        </g>
+      );
+    });
   };
 
   return (
@@ -1539,6 +1891,93 @@ function App() {
                   <RotateCcw size={16} />
                 </ActionIcon>
               </Tooltip>
+              <Popover width={252} position="bottom-end" shadow="md" withArrow>
+                <Popover.Target>
+                  <ActionIcon
+                    variant="subtle"
+                    color="gray"
+                    aria-label="Canvas settings"
+                  >
+                    <Settings2 size={16} />
+                  </ActionIcon>
+                </Popover.Target>
+                <Popover.Dropdown className="grid-settings-panel">
+                  <div className="canvas-layout-settings">
+                    <strong>Track layout</strong>
+                    <NumberInput
+                      label="Track height"
+                      description="Also adjustable with Shift + wheel"
+                      suffix=" px"
+                      min={MIN_TRACK_HEIGHT}
+                      max={MAX_TRACK_HEIGHT}
+                      step={4}
+                      value={Math.round(trackHeight)}
+                      onChange={(value) =>
+                        updateTrackHeight(Number(value) || MIN_TRACK_HEIGHT)
+                      }
+                    />
+                  </div>
+                  <div className="grid-settings-heading">
+                    <strong>Vertical grid</strong>
+                    <Switch
+                      aria-label="Show vertical grid"
+                      size="xs"
+                      checked={canvasSettings.showVerticalGrid}
+                      onChange={(event) => {
+                        const showVerticalGrid = event.currentTarget.checked;
+                        setProject((current) => ({
+                          ...current,
+                          canvasSettings: {
+                            ...(current.canvasSettings ??
+                              DEFAULT_CANVAS_SETTINGS),
+                            showVerticalGrid,
+                          },
+                        }));
+                      }}
+                    />
+                  </div>
+                  <SegmentedControl
+                    fullWidth
+                    size="xs"
+                    value={canvasSettings.gridMode}
+                    data={[
+                      { label: "Auto reference", value: "auto" },
+                      { label: "Custom interval", value: "custom" },
+                    ]}
+                    onChange={(gridMode) =>
+                      setProject((current) => ({
+                        ...current,
+                        canvasSettings: {
+                          ...(current.canvasSettings ?? DEFAULT_CANVAS_SETTINGS),
+                          gridMode: gridMode as "auto" | "custom",
+                        },
+                      }))
+                    }
+                  />
+                  <NumberInput
+                    label="Grid interval"
+                    description={
+                      canvasSettings.gridMode === "auto"
+                        ? `Reference subdivision · ${formatAxisTime(gridIntervalPs)}`
+                        : "Distance between vertical lines"
+                    }
+                    suffix=" ps"
+                    min={1}
+                    step={10}
+                    disabled={canvasSettings.gridMode !== "custom"}
+                    value={canvasSettings.gridIntervalPs}
+                    onChange={(value) =>
+                      setProject((current) => ({
+                        ...current,
+                        canvasSettings: {
+                          ...(current.canvasSettings ?? DEFAULT_CANVAS_SETTINGS),
+                          gridIntervalPs: Math.max(1, Number(value) || 1),
+                        },
+                      }))
+                    }
+                  />
+                </Popover.Dropdown>
+              </Popover>
             </div>
           </div>
 
@@ -1766,7 +2205,7 @@ function App() {
                   />
                 )}
                 <g className="grid">
-                  {gridMarks.map((mark) => {
+                  {canvasSettings.showVerticalGrid && gridMarks.map((mark) => {
                     const x = timelineX(mark.timePs);
                     return (
                       <line
@@ -1800,7 +2239,23 @@ function App() {
                   })}
                 </g>
 
+                {renderConstraintWindows()}
+                {renderDelayBackgrounds()}
+
                 {trackLayouts.map(({ height, signal, y }) => {
+                  const renderedSignal = signalWithLinkedStart(signal);
+                  const renderedStartPs = Math.min(
+                    project.durationPs,
+                    Math.max(
+                      0,
+                      renderedSignal.startPs +
+                        (renderedSignal.kind === "clock"
+                          ? renderedSignal.phasePs
+                          : 0),
+                    ),
+                  );
+                  const startX = timelineX(renderedStartPs);
+                  const rowCenterY = y + height / 2;
                   return (
                     <g key={signal.id} className="wave-row">
                       <rect
@@ -1817,30 +2272,52 @@ function App() {
                         y1={y + height - 1}
                         y2={y + height - 1}
                       />
-                      {signal.kind === "clock" ? (
+                      {renderedStartPs > 0 && (
+                        <g className="wave-start-continuity" aria-hidden="true">
+                          {renderedSignal.kind === "data" && (
+                            <line
+                              className="wave-prelude"
+                              x1={timelineX(0)}
+                              x2={startX}
+                              y1={rowCenterY}
+                              y2={rowCenterY}
+                              stroke={renderedSignal.color}
+                            />
+                          )}
+                          <line
+                            className="wave-start-guide"
+                            x1={startX}
+                            x2={startX}
+                            y1={rowCenterY - Math.max(9, height * 0.22)}
+                            y2={rowCenterY + Math.max(9, height * 0.22)}
+                            stroke={renderedSignal.color}
+                          />
+                        </g>
+                      )}
+                      {renderedSignal.kind === "clock" ? (
                         <>
                           <path
                             d={pathForPoints(
-                              clockWavePoints(signal, project.durationPs),
+                              clockWavePoints(renderedSignal, project.durationPs),
                               project.durationPs,
                               canvasWidth,
                               y,
                               height,
                             )}
                             fill="none"
-                            stroke={signal.color}
+                            stroke={renderedSignal.color}
                             className="wave-path-glow"
                           />
                           <path
                             d={pathForPoints(
-                              clockWavePoints(signal, project.durationPs),
+                              clockWavePoints(renderedSignal, project.durationPs),
                               project.durationPs,
                               canvasWidth,
                               y,
                               height,
                             )}
                             fill="none"
-                            stroke={signal.color}
+                            stroke={renderedSignal.color}
                             className="wave-path"
                           />
                         </>
@@ -1848,7 +2325,7 @@ function App() {
                         <g className="data-symbols">
                           {(() => {
                             const segments = buildDataSegments(
-                              signal,
+                              renderedSignal,
                               project.durationPs,
                             );
                             return segments.map((segment, segmentIndex) => {
@@ -1856,8 +2333,8 @@ function App() {
                               const x2 = timelineX(segment.endPs);
                               const centerY = y + height / 2;
                               const halfHeight = Math.max(
-                                10,
-                                (height - 20) / 2,
+                                9,
+                                height * 0.22,
                               );
                               const notch = Math.min(7, (x2 - x1) / 4);
                               const color = colorForDataToken(segment.token);
@@ -2015,6 +2492,7 @@ function App() {
                     </g>
                   );
                 })}
+                {renderDelayLinks()}
               </svg>
             </div>
           </div>
@@ -2026,8 +2504,7 @@ function App() {
             </div>
             <div>Schema v{project.version}</div>
             <div>
-              Grid: {selected?.name ?? "reference"} /{" "}
-              {formatAxisTime(gridPeriodPs / 4)}
+              Grid: {canvasSettings.showVerticalGrid ? formatAxisTime(gridIntervalPs) : "off"}
             </div>
           </div>
         </main>
@@ -2126,16 +2603,43 @@ function App() {
                 </section>
               )}
 
-              <section className="analysis-paused">
-                <Info size={16} />
-                <div>
-                  <strong>Setup / Hold model paused</strong>
-                  <p>
-                    The previous sweep has been removed. Min/max delay,
-                    uncertainty and violation semantics will be designed as a
-                    separate analysis model.
-                  </p>
+              <section className="property-section linked-timing-section">
+                <div className="section-title">
+                  <span>Signal timing</span>
+                  <span className="section-index">04</span>
                 </div>
+                <SignalTimingEditor
+                  durationPs={project.durationPs}
+                  signals={project.signals}
+                  selected={selected}
+                  delayLink={selectedDelayLink}
+                  constraint={selectedConstraint}
+                  onAddDelay={addSelectedDelay}
+                  onChangeDelay={updateSelectedDelay}
+                  onRemoveDelay={() => {
+                    setProject((current) => ({
+                      ...current,
+                      delayLinks: (current.delayLinks ?? []).filter(
+                        (link) => link.targetSignalId !== selected.id,
+                      ),
+                    }));
+                    setStatusMessage(`${selected.name} delay removed`);
+                  }}
+                  onAddConstraint={addSelectedConstraint}
+                  onChangeConstraint={updateSelectedConstraint}
+                  onRemoveConstraint={() => {
+                    setProject((current) => ({
+                      ...current,
+                      timingConstraints: (
+                        current.timingConstraints ?? []
+                      ).filter(
+                        (constraint) =>
+                          constraint.targetSignalId !== selected.id,
+                      ),
+                    }));
+                    setStatusMessage(`${selected.name} constraint removed`);
+                  }}
+                />
               </section>
             </div>
           )}

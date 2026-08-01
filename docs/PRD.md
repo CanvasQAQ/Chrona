@@ -6,6 +6,8 @@
 > 原产品工作名：Timing Diagram Editor
 
 > 2026-07-28 修订：输入、Data Pattern、Signal Track Header、Canvas 与动画定义已更新。冲突内容以 [V1 交互修订说明](INTERACTION_SPEC.md) 为准。
+>
+> 2026-08-01 修订：Timing 功能调整为附着于单个 Signal 的 Delay 与 Setup/Hold 约束，补充多边沿选择、派生 Start、图示标签和 Canvas Settings。
 
 ## 1. 产品概述
 
@@ -15,20 +17,20 @@ Chrona
 
 ### 1.2 产品定位
 
-Chrona 是一个面向硬件设计工程师、验证工程师和系统工程师的桌面级时序绘制与分析工具，用于快速创建、编辑、分析和展示数字系统中的：
+Chrona 是一个面向硬件设计工程师、验证工程师和系统工程师的桌面级时序绘制与展示工具，用于快速创建、编辑和展示数字系统中的：
 
 - Clock 时钟关系
 - Data 数据变化
 - Setup/Hold 时序约束
-- Timing Margin
-- Timing Violation
+- Timing Window
+- Delay 变化造成的边沿关系
 - 时序动画扫描
 
-产品帮助工程师在设计、调试和文档沟通阶段快速理解复杂时序关系。
+产品帮助工程师在设计、调试和文档沟通阶段清晰表达已知的复杂时序关系。它不替代 STA，也不负责自动定位或判断问题。
 
 ### 1.3 一句话定义
 
-> 一个面向硬件工程师的可交互 Timing Diagram 编辑器，将传统静态时序图升级为可计算、可分析、可动画化的工程工具。
+> 一个面向硬件工程师的可交互 Timing Diagram 编辑器，将传统静态时序图升级为可计算、可联动、可动画化的工程表达工具。
 
 ## 2. 产品背景
 
@@ -42,17 +44,17 @@ Chrona 是一个面向硬件设计工程师、验证工程师和系统工程师�
 
 普通绘图工具无法理解 Clock Period、Data Rate、Setup/Hold Window 和 Phase Relationship，因此图形即使看起来正确，也无法保证时序逻辑正确。
 
-### 2.3 缺少交互分析能力
+### 2.3 缺少联动展示能力
 
-传统工具难以支持拖动 Edge 查看 Timing Margin、调整 Phase 后实时观察影响，以及通过动画观察采样窗口。
+传统工具难以在修改 Delay、Phase 或约束后实时联动相关波形，也难以将这些关系稳定地输出为清晰的矢量示意图。
 
 ## 3. 产品目标
 
-打造一个“类似 Figma 的 Timing Diagram 编辑器 + 基础 Timing Analysis 引擎”，提供：
+打造一个“类似 Figma 的 Timing Diagram 编辑器 + Timing Relationship 引擎”，提供：
 
 - 可视化编辑
-- 时序计算
-- 交互分析
+- 时序关系联动
+- 交互式因果展示
 - 工程保存与恢复
 - 矢量图导出
 
@@ -72,10 +74,10 @@ Chrona 是一个面向硬件设计工程师、验证工程师和系统工程师�
 
 典型需求：
 
-- 根据协议要求验证 Timing Requirement
-- 检查 Setup/Hold Margin
+- 根据协议要求绘制 Timing Requirement
+- 展示 Setup/Hold 与 Delay 的关系
 
-主要关注 Violation 标记、Timing Window 和 Edge Relationship。
+主要关注 Timing Window、Edge Relationship 和清晰的 SVG 输出。
 
 ### 4.3 Application / System Engineer
 
@@ -94,19 +96,21 @@ Chrona 是一个面向硬件设计工程师、验证工程师和系统工程师�
 
 系统自动生成 Clock Edge 和 Data Transition，并计算两者的时间关系。
 
-### 5.2 调整 Clock Phase 并分析影响
+### 5.2 调整 Clock Phase 并展示影响
 
 用户拖动 Clock Edge 或修改 Phase。
 
-系统实时更新 Waveform、Sampling Window 和 Timing Margin。
+系统实时更新 Waveform 和关联的 Delay / Setup/Hold 图形。
 
-### 5.3 检查 Timing Constraint（待重新定义）
+### 5.3 展示 Timing Constraint
 
-Setup/Hold、Min/Max Delay、不确定性和 Violation 的产品语义需要结合新的动画需求单独定义。在定义完成前，不显示可能误导用户的分析结论。
+用户选中一个目标 Signal，为它建立来自任意 Source Signal 的 Edge Delay。所选边沿作为对齐锚点，Current Delay 换算为目标 Signal 的派生 Start offset，从而平移整条目标波形；Min/Max 作为低对比度范围边界显示。
 
-### 5.4 Delay Uncertainty 动画（待重新定义）
+Setup/Hold Window 是附着在任意目标 Signal 上的独立约束。Reference 与 Constrained 两侧均可选择边沿类型和多个边沿编号；每个 Reference edge 产生独立窗口，任一所选目标 edge 进入时，该窗口以浅色半透明红色反馈，不生成 STA 式诊断文本。
 
-旧版沿时间轴移动 Sampling Point 的 Timing Sweep 不再采用。未来动画用于展示 Clock/Data 不确定性造成的 Min/Max Delay 偏移，以及不同 Delay 对 Violation 的影响。
+### 5.4 Per-Signal Delay 动态展示
+
+旧版沿时间轴移动 Sampling Point 的 Timing Sweep 不再采用。用户选中某个 Signal，为它设置 Source 和 Current Delay，目标整条波形的派生 Start 与相关 Setup/Hold Window 在画布中实时联动。
 
 ### 5.5 导出 Timing Document
 
@@ -127,7 +131,9 @@ PNG 和 PDF 导出属于后续版本。
 以 JSON 格式保存：
 
 - Signals
-- Constraints
+- Delay Links
+- Timing Constraints
+- Canvas Settings
 - View State
 
 #### 打开工程
@@ -192,23 +198,29 @@ UI 时间输入支持：
 
 角度必须基于关联 Clock 的周期换算。例如，当周期为 1000 ps 时，`-90 deg` 转换为 `-250 ps`。
 
-### 6.5 Timing Analysis（定义中）
+### 6.5 Per-Signal Timing Illustration
 
-系统自动计算：
+系统支持：
 
-- Setup Window
-- Setup Margin
-- Setup Violation
-- Hold Window
-- Hold Margin
-- Hold Violation
+- 选中任意 Signal 后，为其设置任意类型的 Source Signal 和两侧 edge
+- 每条关系的 Min / Current / Max Delay
+- 每条 Delay 带可编辑的 Diagram Label，新建时自动按 `t1`、`t2` 等顺序命名
+- Current Delay 通过所选边沿锚点计算目标 Signal 的派生 Start offset，并平移整条目标波形
+- Target 可继续作为另一条关系的 Source，使多个 Signal Delay 按依赖传播
+- Setup/Hold 作为独立约束附着到目标 Signal，两侧均支持 Rising/Falling/All 类型与多个边沿编号
+- 新建 Setup/Hold 约束时两侧默认均为 10 ps
+- 每个 Reference edge 生成独立窗口；所选 Constrained edges 进入时，对应窗口整体显示浅色半透明红色反馈
+- Min/Max 虚线边界、Delay 测量线和 Window 随 SVG 导出
+- Signal 轨道最小高度为 48 px，保持较低的波形占高比例；Canvas Settings 可直接设置 48–160 px 的 Track Height，并与 Shift + 滚轮同步
+- 延迟后的 Data Start 左侧显示连续引导线与起点标记，避免波形无承接地从空白处开始
+- 用户可在画布右上角隐藏纵向网格，或在 Auto Reference 与 Custom Interval 之间切换
 
-上述结果的精确定义暂缓，等待 Min/Max Delay 与不确定性模型确认后再进入实现。
+系统不自动计算 Margin、Pass/Violation 或 Worst Path。
 
-### 6.6 动画（定义中）
+### 6.6 动画
 
 - 不实现旧版从左到右的扫描动画
-- 后续动画围绕 Min/Max Delay、不确定性和 Violation 设计
+- 动态展示围绕各 Signal 的 Current Delay 变化设计
 - 动画过程不得改变原始时序数据
 
 ### 6.7 导出
@@ -256,7 +268,9 @@ Property Panel 用于创建对象、编辑对象和查看计算结果，包括�
 
 - Clock：Period、Frequency、Phase、Start Time
 - Data：Period/Frequency、Pattern、Start
-- Constraint 与 Analysis Result：待新的 Delay/Violation 模型定义后补充
+- Signal Delay：Diagram Label、Source/Target Signal、两侧边沿、Min/Current/Max Delay
+- Timing Constraint：Reference/Target Signal、两侧边沿类型与多个边沿编号、Setup/Hold
+- Canvas Settings：Track Height、Vertical Grid 显示方式与间隔
 
 ## 8. 数据模型需求
 
@@ -265,11 +279,13 @@ TimingProject
 ├── Signal[]
 │   ├── Clock
 │   └── Data
-├── Constraint[]
+├── EdgeDelayLink[]
+├── TimingConstraint[]
+├── CanvasSettings
 └── ViewState
 ```
 
-数据模型应独立于具体 UI 组件，并能够无损序列化为 JSON。
+数据模型应独立于具体 UI 组件，并能够无损序列化为 JSON。旧版 `linkedTiming` 仅用于打开历史工程时迁移，不再作为新工程的写入结构。
 
 ## 9. 非功能需求
 
@@ -308,6 +324,9 @@ V1 在技术方案确定后补充可量化的帧率、Edge 数量和加载时间
 - 固定在画布左侧的 Signal Label
 - JSON 保存与打开
 - SVG 导出
+- Per-Signal Delay 与多级联动
+- 多边沿 Setup/Hold 约束及图形反馈
+- Canvas Settings
 
 ### 10.2 V1 增强项
 
@@ -333,7 +352,7 @@ V1 达到以下条件时视为可验收：
 
 1. 用户可以从空白工程创建至少一个 Clock 和一个 Data Signal。
 2. 修改 Signal 参数后，波形和时间位置立即正确更新。
-3. 用户可以拖动 Edge，且底层时间数据同步更新。
+3. 用户可以为任意 Signal 配置跨类型 Source Delay，修改 Current 后整条目标波形及后级 Delay 实时联动。
 4. 用户可以在 Period/Frequency 之间切换输入，并得到相同的底层时间值。
 5. 用户可以在 ps/phase 之间切换输入 Start 和 Clock Phase。
 6. 用户可以使用快捷 Token 或批量输入构建 `D0 D1 D2` Pattern。
@@ -343,6 +362,8 @@ V1 达到以下条件时视为可验收：
 10. 用户可以导出内容完整、可缩放的 SVG。
 11. 一个包含 100 个 Signal 的工程仍可完成基本编辑、缩放和滚动。
 12. Timing Engine 的单位换算与 Pattern 规则通过自动化测试。
+13. 用户可以在约束两侧选择边沿类型和多个边沿；目标边沿进入窗口时，仅对应窗口显示半透明红色反馈。
+14. Track Height 与 Vertical Grid 设置保存后可以正确恢复，并出现在 SVG 中。
 
 ## 12. 产品成功指标
 
@@ -352,11 +373,11 @@ V1 达到以下条件时视为可验收：
 
 ### 12.2 正确性
 
-拖动 Edge 或修改时序参数后，Timing Result 自动且正确地更新。
+修改 Signal、Delay 或 Constraint 参数后，对应波形和图形关系自动且正确地更新。
 
 ### 12.3 可用性
 
-用户无需学习专业 EDA 软件，即可完成绘制、分析、保存和导出。
+用户无需学习专业 EDA 软件，即可完成绘制、关系展示、保存和导出。
 
 ## 13. 产品核心原则
 
@@ -370,8 +391,8 @@ V1 达到以下条件时视为可验收：
 
 - 桌面运行时和前端技术栈
 - Data Pattern 的 V1 输入格式及合法性规则
-- Setup/Hold 的参考 Edge、采样 Edge 和 Margin 计算定义
-- Clock/Data 不确定性、Min/Max Delay 与 Violation 动画定义
+- Delay 依赖形成环路时的阻止与解释方式
+- 很长的 Delay 链同时存在时的关系筛选与排版方式
 - 多个 Clock 存在时，`deg` 输入关联哪个 Clock
 - Edge 拖动对周期生成波形的影响：修改单个 Edge、调整 Phase，还是改变 Pattern
 - Undo/Redo 和 Snap 是否属于首个可发布版本

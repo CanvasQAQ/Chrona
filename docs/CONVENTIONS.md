@@ -17,7 +17,9 @@
 - 通用交互目标不小于 36 px；关键操作目标不小于 44 px。
 - 组合滚轮手势使用 `{ passive: false }` 的原生 `wheel` 监听，确保 Electron/Chromium 可以阻止浏览器默认缩放。
 - Timeline Zoom 必须以指针所在时间为锚点，不能在缩放时使用户正在观察的边沿跳离视口。
-- Track Height 使用全局统一状态；`Shift + Wheel` 在画布任意位置同步调整全部 Signal。
+- Track Height 使用全局统一状态并保存在 `canvasSettings`；Canvas Settings 和 `Shift + Wheel` 在 48–160 px 范围内同步调整全部 Signal。
+- Signal Delay 和 Setup/Hold 的编辑入口附着于当前选中的目标 Signal，不使用项目级 Clock/Data 配对表单。
+- Delay、约束窗口和冲突反馈都应以低干扰图形表达为主，不生成 STA 式结论文本。
 
 ## 架构
 
@@ -26,5 +28,8 @@
 - `src/components`：可复用的业务组件。
 - `src/App.tsx`：当前 V1 垂直切片的状态编排；功能扩展后再拆分为 feature 模块。
 - Timing Engine 不得依赖 React 或 Mantine，并必须具备自动化测试。
+- 新工程分别使用 `delayLinks[]` 和 `timingConstraints[]` 保存关系；`linkedTiming` 仅作为历史工程的读取迁移入口。
+- Delay 的计算结果是目标 Signal 的派生 Start offset，不得覆盖 Signal 保存的基础 Start。
+- `canvasSettings` 保存轨道高度与纵向网格设置；缺省值必须由领域层统一补齐。
 
 Renderer 禁止启用 Node Integration；系统能力必须通过受控的 Preload/API 暴露。

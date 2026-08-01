@@ -4,9 +4,21 @@ Chrona 是一款面向硬件设计、验证和系统工程师的可交互 Timing
 
 当前阶段：V1 垂直切片开发中。
 
+## 当前能力
+
+- 创建并编辑 Clock / Data 波形，使用统一的 `ps` 时间模型
+- 为任意目标 Signal 配置来自任意 Source Signal 的 Delay，并通过锚点边沿联动整条目标波形
+- 使用 Min / Current / Max 表达 Delay 范围，并为图中测量线设置 `t1`、`t2` 等自定义名称
+- 为任意 Signal 添加多边沿 Setup/Hold 约束；目标边沿进入窗口时，以低干扰的半透明红色区域反馈
+- 调整轨道高度、纵向网格和网格间隔，并随工程保存
+- 保存/打开 `.chrona.json` 工程，导出包含波形、Delay 与约束窗口的 SVG
+
+Chrona 的 Timing 功能用于制作清晰、可复现的调试示意图，不替代 STA，也不自动判断路径、裕量或问题来源。
+
 ## 项目文档
 
 - [产品需求文档（PRD）](docs/PRD.md)
+- [V1 交互修订说明](docs/INTERACTION_SPEC.md)
 - [工程约定](docs/CONVENTIONS.md)
 
 ## 本地运行
@@ -47,10 +59,6 @@ GitHub Release，并把以上安装包上传到该 Release。
 npm run package:linux
 ```
 
-## 交互设计
-
-- [V1 交互修订说明](docs/INTERACTION_SPEC.md)
-
 ## 示例工程
 
 - [Generic Timing Example](examples/generic-timing-example.chrona.json)
@@ -62,3 +70,4 @@ npm run package:linux
 - `Ctrl + Mouse Wheel`：以鼠标所在时间点为中心缩放
 - `Shift + Mouse Wheel`：同步调整全部轨道与波形高度
 - `Fit All`：恢复并横向显示完整时间范围
+- `Canvas Settings`：设置 48–160 px 轨道高度，以及纵向网格显示方式和间隔

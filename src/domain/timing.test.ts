@@ -9,6 +9,11 @@ import {
   frequencyToPeriodPs,
   normalizeDataPattern,
   periodPsToFrequency,
+  resolveDelayLinks,
+  resolveEdgeDelay,
+  resolveLinkedTiming,
+  resolveTimingConstraint,
+  signalEdgesByPolarity,
   type ClockSignal,
   type DataSignal,
 } from "./timing";
@@ -126,5 +131,181 @@ describe("timing engine", () => {
 
   it("emits symbolic data transitions only when the value changes", () => {
     expect(dataEdges(data, 4000)).toEqual([1600, 3200, 4000]);
+  });
+
+  it("resolves a current edge from a source edge and bounded delay", () => {
+    const resolved = resolveEdgeDelay([clock, { ...clock, id: "capture" }], 4000, {
+      sourceSignalId: "clk",
+      targetSignalId: "capture",
+      sourceEdge: 2,
+      targetEdge: 2,
+      minPs: 80,
+      currentPs: 140,
+      maxPs: 220,
+    });
+
+    expect(resolved).toEqual({
+      sourceTimePs: 1000,
+      targetBaseTimePs: 1000,
+      targetTimePs: 1140,
+      minTimePs: 1080,
+      maxTimePs: 1220,
+      targetShiftPs: 140,
+    });
+  });
+
+  it("allows a data transition to drive a clock start offset", () => {
+    const resolved = resolveEdgeDelay([clock, data], 4000, {
+      sourceSignalId: "data",
+      targetSignalId: "clk",
+      sourceEdge: 1,
+      targetEdge: 2,
+      minPs: 100,
+      currentPs: 200,
+      maxPs: 300,
+    });
+
+    expect(resolved?.sourceTimePs).toBe(1600);
+    expect(resolved?.targetTimePs).toBe(1800);
+    expect(resolved?.targetShiftPs).toBe(800);
+  });
+
+  it("propagates an upstream whole-signal shift into the next delay", () => {
+    const capture = { ...clock, id: "capture" };
+    const resolved = resolveLinkedTiming([clock, capture, data], 4000, {
+      id: "linked",
+      clock: {
+        sourceSignalId: "clk",
+        targetSignalId: "capture",
+        sourceEdge: 2,
+        targetEdge: 2,
+        minPs: 80,
+        currentPs: 140,
+        maxPs: 220,
+      },
+      data: {
+        sourceSignalId: "capture",
+        targetSignalId: "data",
+        sourceEdge: 2,
+        targetEdge: 1,
+        minPs: 100,
+        currentPs: 200,
+        maxPs: 300,
+      },
+      setupPs: 100,
+      holdPs: 100,
+    });
+
+    expect(resolved.signalShiftsPs.capture).toBe(140);
+    expect(resolved.data?.sourceTimePs).toBe(1140);
+    expect(resolved.data?.targetTimePs).toBe(1340);
+    expect(resolved.signalShiftsPs.data).toBe(-260);
+  });
+
+  it("resolves independent per-signal delay relationships", () => {
+    const capture = { ...clock, id: "capture" };
+    const resolved = resolveDelayLinks([clock, capture, data], 4000, [
+      {
+        id: "capture-delay",
+        sourceSignalId: "clk",
+        targetSignalId: "capture",
+        sourceEdge: 2,
+        targetEdge: 2,
+        minPs: 100,
+        currentPs: 150,
+        maxPs: 200,
+      },
+      {
+        id: "data-delay",
+        sourceSignalId: "capture",
+        targetSignalId: "data",
+        sourceEdge: 2,
+        targetEdge: 1,
+        minPs: 100,
+        currentPs: 250,
+        maxPs: 300,
+      },
+    ]);
+
+    expect(resolved.byId["capture-delay"].targetShiftPs).toBe(150);
+    expect(resolved.byId["data-delay"].sourceTimePs).toBe(1150);
+    expect(resolved.byId["data-delay"].targetTimePs).toBe(1400);
+  });
+
+  it("flags a constrained edge inside its setup and hold window", () => {
+    const resolved = resolveTimingConstraint([clock, data], 4000, {
+      id: "constraint",
+      sourceSignalId: "clk",
+      targetSignalId: "data",
+      sourceEdge: 3,
+      targetEdge: 1,
+      setupPs: 450,
+      holdPs: 100,
+    });
+
+    expect(resolved).toEqual({
+      targetTimesPs: [1600],
+      windows: [
+        {
+          sourceTimePs: 2000,
+          startTimePs: 1550,
+          endTimePs: 2100,
+          isViolated: true,
+          violatingTargetTimesPs: [1600],
+        },
+      ],
+    });
+  });
+
+  it("enumerates clock rising, falling, and both edge polarities", () => {
+    expect(signalEdgesByPolarity(clock, 2200, "rising")).toEqual([
+      0, 1000, 2000,
+    ]);
+    expect(signalEdgesByPolarity(clock, 2200, "falling")).toEqual([
+      500, 1500,
+    ]);
+    expect(signalEdgesByPolarity(clock, 2200, "both")).toEqual([
+      0, 500, 1000, 1500, 2000,
+    ]);
+  });
+
+  it("creates one window per selected source edge and checks many target edges", () => {
+    const logicData: DataSignal = {
+      ...data,
+      id: "logic-data",
+      periodPs: 500,
+      pattern: ["0", "1", "1", "0"],
+    };
+    const resolved = resolveTimingConstraint([clock, logicData], 3000, {
+      id: "multi-edge",
+      sourceSignalId: "clk",
+      targetSignalId: "logic-data",
+      sourceEdge: 1,
+      targetEdge: 1,
+      sourceEdgeKind: "falling",
+      targetEdgeKind: "rising",
+      sourceEdges: [1, 2],
+      targetEdges: [],
+      setupPs: 100,
+      holdPs: 100,
+    });
+
+    expect(resolved?.targetTimesPs).toEqual([500, 2500]);
+    expect(resolved?.windows).toEqual([
+      {
+        sourceTimePs: 500,
+        startTimePs: 400,
+        endTimePs: 600,
+        isViolated: true,
+        violatingTargetTimesPs: [500],
+      },
+      {
+        sourceTimePs: 1500,
+        startTimePs: 1400,
+        endTimePs: 1600,
+        isViolated: false,
+        violatingTargetTimesPs: [],
+      },
+    ]);
   });
 });

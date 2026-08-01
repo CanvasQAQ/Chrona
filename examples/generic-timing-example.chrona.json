@@ -7,6 +7,51 @@
     "holdPs": 120,
     "status": "awaiting-definition"
   },
+  "delayLinks": [
+    {
+      "id": "example-clock-delay",
+      "label": "t1",
+      "sourceSignalId": "example-clk",
+      "targetSignalId": "example-aux-clock",
+      "sourceEdge": 3,
+      "targetEdge": 5,
+      "minPs": 125,
+      "currentPs": 250,
+      "maxPs": 375
+    },
+    {
+      "id": "example-data-delay",
+      "label": "t2",
+      "sourceSignalId": "example-aux-clock",
+      "targetSignalId": "example-data-bus",
+      "sourceEdge": 1,
+      "targetEdge": 1,
+      "minPs": 180,
+      "currentPs": 420,
+      "maxPs": 620
+    }
+  ],
+  "timingConstraints": [
+    {
+      "id": "example-data-constraint",
+      "sourceSignalId": "example-aux-clock",
+      "targetSignalId": "example-data-bus",
+      "sourceEdge": 5,
+      "targetEdge": 1,
+      "sourceEdgeKind": "rising",
+      "targetEdgeKind": "transition",
+      "sourceEdges": [3, 5, 7],
+      "targetEdges": [],
+      "setupPs": 180,
+      "holdPs": 120
+    }
+  ],
+  "canvasSettings": {
+    "showVerticalGrid": true,
+    "gridMode": "auto",
+    "gridIntervalPs": 250,
+    "trackHeight": 48
+  },
   "signals": [
     {
       "id": "example-clk",

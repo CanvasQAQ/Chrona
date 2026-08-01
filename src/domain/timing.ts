@@ -1,4 +1,5 @@
 export type SignalKind = "clock" | "data";
+export type EdgePolarity = "rising" | "falling" | "both" | "transition";
 
 export interface SignalBase {
   id: string;
@@ -56,6 +57,50 @@ export interface DataSignal extends SignalBase {
 
 export type Signal = ClockSignal | DataSignal;
 
+export interface EdgeDelayLink {
+  id?: string;
+  label?: string;
+  sourceSignalId: string;
+  targetSignalId: string;
+  /** One-based index into the visible rising edges / data transitions. */
+  sourceEdge: number;
+  /** One-based index into the visible rising edges / data transitions. */
+  targetEdge: number;
+  minPs: number;
+  currentPs: number;
+  maxPs: number;
+}
+
+export interface CanvasSettings {
+  showVerticalGrid: boolean;
+  gridMode: "auto" | "custom";
+  gridIntervalPs: number;
+  trackHeight: number;
+}
+
+export interface TimingConstraint {
+  id: string;
+  sourceSignalId: string;
+  targetSignalId: string;
+  sourceEdge: number;
+  targetEdge: number;
+  /** Empty arrays mean every visible edge of the selected polarity. */
+  sourceEdges?: number[];
+  targetEdges?: number[];
+  sourceEdgeKind?: EdgePolarity;
+  targetEdgeKind?: EdgePolarity;
+  setupPs: number;
+  holdPs: number;
+}
+
+export interface LinkedTiming {
+  id: string;
+  clock: EdgeDelayLink;
+  data: EdgeDelayLink;
+  setupPs: number;
+  holdPs: number;
+}
+
 export interface TimingConstraintDraft {
   setupPs: number;
   holdPs: number;
@@ -69,6 +114,44 @@ export interface TimingProject {
   signals: Signal[];
   signalGroups?: SignalGroup[];
   constraintDraft: TimingConstraintDraft;
+  delayLinks?: EdgeDelayLink[];
+  timingConstraints?: TimingConstraint[];
+  canvasSettings?: CanvasSettings;
+  /** Legacy paired illustration, migrated when an older project is opened. */
+  linkedTiming?: LinkedTiming;
+}
+
+export interface ResolvedEdgeDelay {
+  sourceTimePs: number;
+  targetBaseTimePs: number;
+  targetTimePs: number;
+  minTimePs: number;
+  maxTimePs: number;
+  targetShiftPs: number;
+}
+
+export interface ResolvedLinkedTiming {
+  clock?: ResolvedEdgeDelay;
+  data?: ResolvedEdgeDelay;
+  signalShiftsPs: Record<string, number>;
+}
+
+export interface ResolvedDelayLinks {
+  byId: Record<string, ResolvedEdgeDelay>;
+  signalShiftsPs: Record<string, number>;
+}
+
+export interface ResolvedConstraintWindow {
+  sourceTimePs: number;
+  startTimePs: number;
+  endTimePs: number;
+  isViolated: boolean;
+  violatingTargetTimesPs: number[];
+}
+
+export interface ResolvedTimingConstraint {
+  targetTimesPs: number[];
+  windows: ResolvedConstraintWindow[];
 }
 
 export interface WavePoint {
@@ -284,6 +367,258 @@ export function dataEdges(
   }
 
   return edges;
+}
+
+export function signalEdgesByPolarity(
+  signal: Signal,
+  durationPs: number,
+  polarity: EdgePolarity,
+): number[] {
+  if (signal.kind === "clock") {
+    const rising = clockEdges(signal, durationPs);
+    if (polarity === "rising") return rising;
+    const period = clampDuration(signal.periodPs);
+    const highDuration =
+      period * Math.min(0.95, Math.max(0.05, signal.dutyCycle));
+    const fallingSignal: ClockSignal = {
+      ...signal,
+      phasePs: signal.phasePs + highDuration,
+    };
+    const falling = clockEdges(fallingSignal, durationPs);
+    if (polarity === "falling") return falling;
+    return [...rising, ...falling].sort((left, right) => left - right);
+  }
+
+  if (polarity === "transition" || polarity === "both") {
+    return dataEdges(signal, durationPs);
+  }
+
+  const period = clampDuration(signal.periodPs);
+  const pattern = patternForDataSignal(signal).map((token) =>
+    token.trim().toUpperCase(),
+  );
+  const edges: number[] = [];
+  let previous = pattern[0];
+  for (
+    let symbol = 1, time = signal.startPs + period;
+    time <= durationPs;
+    symbol += 1, time = signal.startPs + symbol * period
+  ) {
+    const current = pattern[symbol % pattern.length];
+    if (
+      (polarity === "rising" && previous === "0" && current === "1") ||
+      (polarity === "falling" && previous === "1" && current === "0")
+    ) {
+      edges.push(time);
+    }
+    previous = current;
+  }
+  return edges;
+}
+
+export function signalEdges(signal: Signal, durationPs: number): number[] {
+  return signal.kind === "clock"
+    ? clockEdges(signal, durationPs)
+    : dataEdges(signal, durationPs);
+}
+
+export function signalEdgeTime(
+  signal: Signal,
+  durationPs: number,
+  oneBasedEdge: number,
+): number | undefined {
+  const index = Math.max(1, Math.floor(oneBasedEdge)) - 1;
+  return signalEdges(signal, durationPs)[index];
+}
+
+export function resolveEdgeDelay(
+  signals: Signal[],
+  durationPs: number,
+  link: EdgeDelayLink,
+  signalShiftsPs: Record<string, number> = {},
+): ResolvedEdgeDelay | undefined {
+  const source = signals.find((signal) => signal.id === link.sourceSignalId);
+  const target = signals.find((signal) => signal.id === link.targetSignalId);
+  if (!source || !target) return undefined;
+
+  const sourceBaseTimePs = signalEdgeTime(source, durationPs, link.sourceEdge);
+  const targetBaseTimePs = signalEdgeTime(target, durationPs, link.targetEdge);
+  if (sourceBaseTimePs === undefined || targetBaseTimePs === undefined) {
+    return undefined;
+  }
+  const sourceTimePs =
+    sourceBaseTimePs + (signalShiftsPs[source.id] ?? 0);
+
+  const minDelayPs = Math.max(0, Math.min(link.minPs, link.maxPs));
+  const maxDelayPs = Math.max(minDelayPs, Math.max(link.minPs, link.maxPs));
+  const currentDelayPs = Math.min(
+    maxDelayPs,
+    Math.max(minDelayPs, link.currentPs),
+  );
+
+  return {
+    sourceTimePs,
+    targetBaseTimePs,
+    targetTimePs: sourceTimePs + currentDelayPs,
+    minTimePs: sourceTimePs + minDelayPs,
+    maxTimePs: sourceTimePs + maxDelayPs,
+    targetShiftPs: sourceTimePs + currentDelayPs - targetBaseTimePs,
+  };
+}
+
+export function resolveLinkedTiming(
+  signals: Signal[],
+  durationPs: number,
+  timing: LinkedTiming,
+): ResolvedLinkedTiming {
+  const signalShiftsPs: Record<string, number> = {};
+  const resolved: Partial<Record<"clock" | "data", ResolvedEdgeDelay>> = {};
+  const pending: Array<"clock" | "data"> = ["clock", "data"];
+
+  while (pending.length > 0) {
+    const unresolvedTargets = new Set(
+      pending.map((kind) => timing[kind].targetSignalId),
+    );
+    const readyIndex = pending.findIndex((kind) => {
+      const link = timing[kind];
+      return (
+        link.sourceSignalId === link.targetSignalId ||
+        !unresolvedTargets.has(link.sourceSignalId)
+      );
+    });
+    // A circular pair has no dependency-safe order. Resolve it deterministically
+    // from the base waveforms so the canvas remains stable and editable.
+    const index = readyIndex >= 0 ? readyIndex : 0;
+    const [kind] = pending.splice(index, 1);
+    const link = timing[kind];
+    const result = resolveEdgeDelay(
+      signals,
+      durationPs,
+      link,
+      signalShiftsPs,
+    );
+    if (!result) continue;
+    resolved[kind] = result;
+    signalShiftsPs[link.targetSignalId] = result.targetShiftPs;
+  }
+
+  return {
+    clock: resolved.clock,
+    data: resolved.data,
+    signalShiftsPs,
+  };
+}
+
+export function resolveDelayLinks(
+  signals: Signal[],
+  durationPs: number,
+  links: EdgeDelayLink[],
+): ResolvedDelayLinks {
+  const signalShiftsPs: Record<string, number> = {};
+  const byId: Record<string, ResolvedEdgeDelay> = {};
+  const pending = links.map((link, index) => ({
+    link,
+    key: link.id ?? `delay-${index}`,
+  }));
+
+  while (pending.length > 0) {
+    const unresolvedTargets = new Set(
+      pending.map(({ link }) => link.targetSignalId),
+    );
+    const readyIndex = pending.findIndex(({ link }) =>
+      link.sourceSignalId === link.targetSignalId ||
+      !unresolvedTargets.has(link.sourceSignalId),
+    );
+    const index = readyIndex >= 0 ? readyIndex : 0;
+    const [{ link, key }] = pending.splice(index, 1);
+    const resolved = resolveEdgeDelay(
+      signals,
+      durationPs,
+      link,
+      signalShiftsPs,
+    );
+    if (!resolved) continue;
+    byId[key] = resolved;
+    signalShiftsPs[link.targetSignalId] = resolved.targetShiftPs;
+  }
+
+  return { byId, signalShiftsPs };
+}
+
+export function resolveTimingConstraint(
+  signals: Signal[],
+  durationPs: number,
+  constraint: TimingConstraint,
+  signalShiftsPs: Record<string, number> = {},
+): ResolvedTimingConstraint | undefined {
+  const source = signals.find(
+    (signal) => signal.id === constraint.sourceSignalId,
+  );
+  const target = signals.find(
+    (signal) => signal.id === constraint.targetSignalId,
+  );
+  if (!source || !target) return undefined;
+
+  const sourceKind =
+    constraint.sourceEdgeKind ??
+    (source.kind === "clock" ? "rising" : "transition");
+  const targetKind =
+    constraint.targetEdgeKind ??
+    (target.kind === "clock" ? "rising" : "transition");
+  const selectTimes = (
+    signal: Signal,
+    polarity: EdgePolarity,
+    selectedEdges: number[] | undefined,
+    legacyEdge: number,
+  ) => {
+    const times = signalEdgesByPolarity(signal, durationPs, polarity);
+    const indices =
+      selectedEdges === undefined ? [legacyEdge] : selectedEdges;
+    const selectedTimes =
+      indices.length === 0
+        ? times
+        : indices
+            .map((edge) => times[Math.max(1, Math.floor(edge)) - 1])
+            .filter((time): time is number => time !== undefined);
+    const shiftPs = signalShiftsPs[signal.id] ?? 0;
+    return selectedTimes.map((time) => time + shiftPs);
+  };
+
+  const sourceTimesPs = selectTimes(
+    source,
+    sourceKind,
+    constraint.sourceEdges,
+    constraint.sourceEdge,
+  );
+  const targetTimesPs = selectTimes(
+    target,
+    targetKind,
+    constraint.targetEdges,
+    constraint.targetEdge,
+  );
+  if (sourceTimesPs.length === 0 || targetTimesPs.length === 0) {
+    return undefined;
+  }
+
+  const setupPs = Math.max(0, constraint.setupPs);
+  const holdPs = Math.max(0, constraint.holdPs);
+  return {
+    targetTimesPs,
+    windows: sourceTimesPs.map((sourceTimePs) => {
+      const startTimePs = sourceTimePs - setupPs;
+      const endTimePs = sourceTimePs + holdPs;
+      const violatingTargetTimesPs = targetTimesPs.filter(
+        (timePs) => timePs >= startTimePs && timePs <= endTimePs,
+      );
+      return {
+        sourceTimePs,
+        startTimePs,
+        endTimePs,
+        isViolated: violatingTargetTimesPs.length > 0,
+        violatingTargetTimesPs,
+      };
+    }),
+  };
 }
 
 export function clockWavePoints(
