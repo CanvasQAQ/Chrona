@@ -76,6 +76,16 @@ D0 D1 D2 D1
 
 Signal 的显示与隐藏统一放在画布顶部的 Signals 菜单中。菜单列出所有 Signal，并提供 Show All / Hide All；隐藏的 Signal 不出现在 Track Header 和画布中，但始终可以从该菜单恢复。
 
+Signals 菜单升级为 Signal Manager：
+
+- 支持按名称实时搜索 Signal
+- 支持创建/删除分组，并将 Signal 移入分组或移回 Ungrouped
+- 每个分组可折叠，并可批量显示/隐藏组内 Signal
+- 全局 Show All / Hide All 保留
+- 分组信息随 `.chrona.json` 项目文件保存
+
+Track Header 的 Copy / Delete 操作覆盖浮出在行尾，仅在鼠标悬浮或键盘聚焦时显示，不参与 Signal Name 的宽度计算。Signal 列默认按名称渲染宽度的 85 分位数自动适配；用户可拖拽列分隔线手动调整，双击分隔线或聚焦后按 `Home` 恢复自动适配。
+
 键盘替代操作：
 
 - `Alt + Arrow Up`
@@ -119,6 +129,14 @@ Lock 已删除。
 - 初始轨道高度与最小高度均为 48 px，使默认画布保持紧凑
 - Clock 振幅和 Data Symbol 高度随轨道高度连续变化
 - 不设置最大轨道高度
+
+### 6.4 项目时长与 SVG 导出
+
+- 工具栏提供项目总时长输入，内部仍以 `durationPs` 保存
+- SVG 导出提供三种范围：当前画布 View、自定义起止时间、全部项目时长
+- 当前 View 按可见横向视口计算，不受固定 Signal 列遮挡影响
+- 自定义范围必须满足 End 大于 Start，并限制在项目总时长内
+- 导出继续包含当前可见 Signal 的名称与波形，Signal 列使用当前自动或手动宽度
 
 ## 7. Setup/Hold 与动画
 

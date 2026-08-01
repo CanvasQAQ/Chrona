@@ -3,30 +3,39 @@ import {
   Badge,
   Button,
   Menu,
+  NumberInput,
   Popover,
+  Select,
+  SegmentedControl,
   Slider,
   TextInput,
   Tooltip,
+  UnstyledButton,
   useComputedColorScheme,
   useMantineColorScheme,
 } from "@mantine/core";
 import {
   Check,
+  ChevronDown,
+  ChevronRight,
   CirclePlus,
   Clock3,
   Copy,
   Download,
   Eye,
   EyeOff,
+  FolderPlus,
   FolderOpen,
   GripVertical,
   Grid2X2,
   Info,
+  Layers3,
   Minus,
   Moon,
   RotateCcw,
   Save,
   ScanLine,
+  Search,
   Square,
   Sun,
   Trash2,
@@ -57,6 +66,7 @@ import {
   type DataPatternSegment,
   type DataSignal,
   type Signal,
+  type SignalGroup,
   type TimingProject,
   type WavePoint,
 } from "./domain/timing";
@@ -64,7 +74,9 @@ import {
 const MIN_TRACK_HEIGHT = 48;
 const AXIS_HEIGHT = 42;
 const CANVAS_GUTTER = 18;
-const LABEL_WIDTH = 196;
+const DEFAULT_LABEL_WIDTH = 196;
+const MIN_LABEL_WIDTH = 136;
+const MAX_LABEL_WIDTH = 420;
 const CANVAS_BASE_WIDTH = 1120;
 const SIGNAL_COLORS = ["#8b7cff", "#35d6b4", "#ffb45c", "#4db7ff", "#f277a8"];
 
@@ -105,6 +117,39 @@ interface AxisSelection {
   currentX: number;
   pointerId: number;
   startX: number;
+}
+
+type ExportMode = "view" | "range" | "all";
+
+interface ExportRange {
+  endPs: number;
+  startPs: number;
+}
+
+function percentile(values: number[], percentile: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((left, right) => left - right);
+  const index = Math.min(
+    sorted.length - 1,
+    Math.max(0, Math.ceil(percentile * sorted.length) - 1),
+  );
+  return sorted[index];
+}
+
+function autoLabelWidth(signals: Signal[]): number {
+  if (signals.length === 0 || typeof document === "undefined") {
+    return DEFAULT_LABEL_WIDTH;
+  }
+  const context = document.createElement("canvas").getContext("2d");
+  if (!context) return DEFAULT_LABEL_WIDTH;
+  context.font = "700 11px Inter, system-ui, sans-serif";
+  const nameWidth = percentile(
+    signals.map((signal) => context.measureText(signal.name).width),
+    0.85,
+  );
+  return Math.round(
+    Math.min(MAX_LABEL_WIDTH, Math.max(MIN_LABEL_WIDTH, nameWidth + 58)),
+  );
 }
 
 function pathForPoints(
@@ -227,16 +272,27 @@ function inlineSvgStyles(
 function buildStandaloneSvg(
   sourceSvg: SVGSVGElement,
   layouts: TrackLayout[],
-  width: number,
+  sourceWidth: number,
   height: number,
+  labelWidth: number,
+  range: ExportRange,
+  durationPs: number,
+  outputTimelineWidth: number,
 ): string {
+  const safeDuration = Math.max(1, durationPs);
+  const startRatio = Math.max(0, Math.min(1, range.startPs / safeDuration));
+  const endRatio = Math.max(startRatio, Math.min(1, range.endPs / safeDuration));
+  const sourceTimelineWidth = Math.max(1, sourceWidth - CANVAS_GUTTER * 2);
+  const sourceStartX = CANVAS_GUTTER + startRatio * sourceTimelineWidth;
+  const sourceEndX = CANVAS_GUTTER + endRatio * sourceTimelineWidth;
+  const sourceRangeWidth = Math.max(1, sourceEndX - sourceStartX);
   const exported = document.createElementNS(SVG_NAMESPACE, "svg");
   exported.setAttribute("xmlns", SVG_NAMESPACE);
-  exported.setAttribute("width", String(LABEL_WIDTH + width));
+  exported.setAttribute("width", String(labelWidth + outputTimelineWidth));
   exported.setAttribute("height", String(height));
   exported.setAttribute(
     "viewBox",
-    `0 0 ${LABEL_WIDTH + width} ${height}`,
+    `0 0 ${labelWidth + outputTimelineWidth} ${height}`,
   );
 
   const background = document.createElementNS(SVG_NAMESPACE, "rect");
@@ -246,14 +302,14 @@ function buildStandaloneSvg(
   exported.appendChild(background);
 
   const labelBackground = document.createElementNS(SVG_NAMESPACE, "rect");
-  labelBackground.setAttribute("width", String(LABEL_WIDTH));
+  labelBackground.setAttribute("width", String(labelWidth));
   labelBackground.setAttribute("height", String(height));
   labelBackground.setAttribute("fill", "#f8f8fb");
   exported.appendChild(labelBackground);
 
   const labelDivider = document.createElementNS(SVG_NAMESPACE, "line");
-  labelDivider.setAttribute("x1", String(LABEL_WIDTH));
-  labelDivider.setAttribute("x2", String(LABEL_WIDTH));
+  labelDivider.setAttribute("x1", String(labelWidth));
+  labelDivider.setAttribute("x2", String(labelWidth));
   labelDivider.setAttribute("y1", "0");
   labelDivider.setAttribute("y2", String(height));
   labelDivider.setAttribute("stroke", "#dfe1e8");
@@ -272,7 +328,7 @@ function buildStandaloneSvg(
   layouts.forEach(({ height: trackHeight, signal, y }) => {
     const divider = document.createElementNS(SVG_NAMESPACE, "line");
     divider.setAttribute("x1", "0");
-    divider.setAttribute("x2", String(LABEL_WIDTH));
+    divider.setAttribute("x2", String(labelWidth));
     divider.setAttribute("y1", String(y + trackHeight - 1));
     divider.setAttribute("y2", String(y + trackHeight - 1));
     divider.setAttribute("stroke", "#e3e4eb");
@@ -291,10 +347,15 @@ function buildStandaloneSvg(
 
   const clonedCanvas = sourceSvg.cloneNode(true) as SVGSVGElement;
   inlineSvgStyles(sourceSvg, clonedCanvas);
-  clonedCanvas.setAttribute("x", String(LABEL_WIDTH));
+  clonedCanvas.setAttribute("x", String(labelWidth));
   clonedCanvas.setAttribute("y", "0");
-  clonedCanvas.setAttribute("width", String(width));
+  clonedCanvas.setAttribute("width", String(outputTimelineWidth));
   clonedCanvas.setAttribute("height", String(height));
+  clonedCanvas.setAttribute(
+    "viewBox",
+    `${sourceStartX} 0 ${sourceRangeWidth} ${height}`,
+  );
+  clonedCanvas.setAttribute("preserveAspectRatio", "none");
 
   clonedCanvas
     .querySelectorAll<SVGElement>(".canvas-background")
@@ -355,12 +416,22 @@ function App() {
   const [selectedId, setSelectedId] = useState("");
   const [zoom, setZoom] = useState(1);
   const [trackHeight, setTrackHeight] = useState(MIN_TRACK_HEIGHT);
+  const [labelWidth, setLabelWidth] = useState(DEFAULT_LABEL_WIDTH);
+  const [isLabelWidthAuto, setIsLabelWidthAuto] = useState(true);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [isCanvasPanning, setIsCanvasPanning] = useState(false);
   const [isWindowMaximized, setIsWindowMaximized] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [axisSelection, setAxisSelection] = useState<AxisSelection | null>(null);
+  const [signalsPanelOpen, setSignalsPanelOpen] = useState(false);
+  const [signalSearch, setSignalSearch] = useState("");
+  const [newGroupName, setNewGroupName] = useState("");
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [exportPanelOpen, setExportPanelOpen] = useState(false);
+  const [exportMode, setExportMode] = useState<ExportMode>("view");
+  const [exportStartPs, setExportStartPs] = useState(0);
+  const [exportEndPs, setExportEndPs] = useState(initialProject.durationPs);
   const [statusMessage, setStatusMessage] = useState("Timing engine ready");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -369,9 +440,23 @@ function App() {
   const pendingScrollLeftRef = useRef<number | null>(null);
   const canvasPanRef = useRef<CanvasPan | null>(null);
   const axisSelectionRef = useRef<AxisSelection | null>(null);
+  const labelResizeRef = useRef<{
+    pointerId: number;
+    startWidth: number;
+    startX: number;
+  } | null>(null);
   const { setColorScheme } = useMantineColorScheme();
   const colorScheme = useComputedColorScheme("light");
   const desktopPlatform = window.chronaWindow?.platform ?? "web";
+
+  const signalNameKey = project.signals
+    .map((signal) => signal.name)
+    .join("\u0000");
+
+  useLayoutEffect(() => {
+    if (!isLabelWidthAuto) return;
+    setLabelWidth(autoLabelWidth(project.signals));
+  }, [isLabelWidthAuto, signalNameKey]);
 
   useEffect(() => {
     const controls = window.chronaWindow;
@@ -383,6 +468,15 @@ function App() {
   const visibleSignals = useMemo(
     () => project.signals.filter((signal) => signal.visible),
     [project.signals],
+  );
+  const signalGroups = project.signalGroups ?? [];
+  const normalizedSignalSearch = signalSearch.trim().toLocaleLowerCase();
+  const matchingSignals = useMemo(
+    () =>
+      project.signals.filter((signal) =>
+        signal.name.toLocaleLowerCase().includes(normalizedSignalSearch),
+      ),
+    [normalizedSignalSearch, project.signals],
   );
   const selected =
     project.signals.find((signal) => signal.id === selectedId) ??
@@ -442,7 +536,7 @@ function App() {
     const currentScrollLeft =
       pendingScrollLeftRef.current ?? viewport.scrollLeft;
     const oldCanvasX =
-      currentScrollLeft + pointerX - LABEL_WIDTH - CANVAS_GUTTER;
+      currentScrollLeft + pointerX - labelWidth - CANVAS_GUTTER;
     const timeRatio = Math.min(1, Math.max(0, oldCanvasX / oldTimelineWidth));
     const nextCanvasWidth = CANVAS_BASE_WIDTH * nextZoom;
     const nextCanvasX =
@@ -451,22 +545,22 @@ function App() {
 
     pendingScrollLeftRef.current = Math.max(
       0,
-      LABEL_WIDTH + nextCanvasX - pointerX,
+      labelWidth + nextCanvasX - pointerX,
     );
     zoomRef.current = nextZoom;
     setZoom(nextZoom);
-  }, []);
+  }, [labelWidth]);
 
   const fitAllWaveforms = useCallback(() => {
     const viewport = canvasViewportRef.current;
     if (!viewport) return;
-    const availableWidth = Math.max(1, viewport.clientWidth - LABEL_WIDTH);
+    const availableWidth = Math.max(1, viewport.clientWidth - labelWidth);
     const nextZoom = availableWidth / CANVAS_BASE_WIDTH;
     pendingScrollLeftRef.current = 0;
     zoomRef.current = nextZoom;
     setZoom(nextZoom);
     setStatusMessage("All waveforms fitted to the viewport");
-  }, []);
+  }, [labelWidth]);
 
   useLayoutEffect(() => {
     const viewport = canvasViewportRef.current;
@@ -610,7 +704,7 @@ function App() {
         (selectionStart - CANVAS_GUTTER) / timelineWidth;
       const visibleTimelineWidth = Math.max(
         1,
-        viewport.clientWidth - LABEL_WIDTH - CANVAS_GUTTER * 2,
+        viewport.clientWidth - labelWidth - CANVAS_GUTTER * 2,
       );
       const nextTimelineWidth = visibleTimelineWidth / selectedRatio;
       const nextCanvasWidth = nextTimelineWidth + CANVAS_GUTTER * 2;
@@ -677,6 +771,102 @@ function App() {
       if (nextVisible) setSelectedId(nextVisible.id);
     }
     setStatusMessage(visible ? "Signal shown" : "Signal hidden");
+  };
+
+  const setSignalsVisibility = (ids: string[], visible: boolean) => {
+    const idSet = new Set(ids);
+    setProject((current) => ({
+      ...current,
+      signals: current.signals.map((signal) =>
+        idSet.has(signal.id) ? { ...signal, visible } : signal,
+      ),
+    }));
+    if (!visible && selected && idSet.has(selected.id)) {
+      const nextVisible = project.signals.find(
+        (signal) => !idSet.has(signal.id) && signal.visible,
+      );
+      setSelectedId(nextVisible?.id ?? "");
+    }
+    setStatusMessage(
+      visible
+        ? `${ids.length} signal${ids.length === 1 ? "" : "s"} shown`
+        : `${ids.length} signal${ids.length === 1 ? "" : "s"} hidden`,
+    );
+  };
+
+  const createSignalGroup = () => {
+    const name = newGroupName.trim();
+    if (!name) return;
+    const group: SignalGroup = { id: crypto.randomUUID(), name };
+    setProject((current) => ({
+      ...current,
+      signalGroups: [...(current.signalGroups ?? []), group],
+    }));
+    setNewGroupName("");
+    setStatusMessage(`${name} group created`);
+  };
+
+  const deleteSignalGroup = (groupId: string) => {
+    const group = signalGroups.find((item) => item.id === groupId);
+    setProject((current) => ({
+      ...current,
+      signalGroups: (current.signalGroups ?? []).filter(
+        (item) => item.id !== groupId,
+      ),
+      signals: current.signals.map((signal) =>
+        signal.groupId === groupId
+          ? { ...signal, groupId: undefined }
+          : signal,
+      ),
+    }));
+    setStatusMessage(`${group?.name ?? "Signal"} group removed`);
+  };
+
+  const toggleGroupCollapsed = (groupId: string) => {
+    setCollapsedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+  };
+
+  const startLabelResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!event.isPrimary) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    labelResizeRef.current = {
+      pointerId: event.pointerId,
+      startWidth: labelWidth,
+      startX: event.clientX,
+    };
+    setIsLabelWidthAuto(false);
+  };
+
+  const moveLabelResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const resize = labelResizeRef.current;
+    if (!resize || resize.pointerId !== event.pointerId) return;
+    setLabelWidth(
+      Math.min(
+        MAX_LABEL_WIDTH,
+        Math.max(MIN_LABEL_WIDTH, resize.startWidth + event.clientX - resize.startX),
+      ),
+    );
+  };
+
+  const endLabelResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (labelResizeRef.current?.pointerId !== event.pointerId) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    labelResizeRef.current = null;
+    setStatusMessage(`Signal column set to ${Math.round(labelWidth)} px`);
+  };
+
+  const resetLabelWidth = () => {
+    setIsLabelWidthAuto(true);
+    setLabelWidth(autoLabelWidth(project.signals));
+    setStatusMessage("Signal column fitted to the 85th percentile");
   };
 
   const addSignal = (kind: "clock" | "data") => {
@@ -800,20 +990,73 @@ function App() {
     setStatusMessage("Project saved");
   };
 
+  const currentViewRange = (): ExportRange => {
+    const viewport = canvasViewportRef.current;
+    if (!viewport) return { startPs: 0, endPs: project.durationPs };
+    const timelineWidth = Math.max(1, canvasWidth - CANVAS_GUTTER * 2);
+    const visibleWidth = Math.max(1, viewport.clientWidth - labelWidth);
+    const startX = Math.max(CANVAS_GUTTER, viewport.scrollLeft);
+    const endX = Math.min(
+      canvasWidth - CANVAS_GUTTER,
+      viewport.scrollLeft + visibleWidth,
+    );
+    return {
+      startPs:
+        (Math.max(CANVAS_GUTTER, startX) - CANVAS_GUTTER) /
+        timelineWidth *
+        project.durationPs,
+      endPs:
+        (Math.max(startX, endX) - CANVAS_GUTTER) /
+        timelineWidth *
+        project.durationPs,
+    };
+  };
+
   const exportSvg = () => {
     if (!svgRef.current) return;
+    const range =
+      exportMode === "view"
+        ? currentViewRange()
+        : exportMode === "range"
+          ? {
+              startPs: Math.max(0, Math.min(project.durationPs, exportStartPs)),
+              endPs: Math.max(0, Math.min(project.durationPs, exportEndPs)),
+            }
+          : { startPs: 0, endPs: project.durationPs };
+    if (range.endPs <= range.startPs) {
+      setStatusMessage("Export end time must be after start time");
+      return;
+    }
+    const viewportTimelineWidth = Math.max(
+      480,
+      (canvasViewportRef.current?.clientWidth ?? 800) - labelWidth,
+    );
+    const rangeRatio = (range.endPs - range.startPs) / project.durationPs;
+    const outputTimelineWidth =
+      exportMode === "view"
+        ? viewportTimelineWidth
+        : exportMode === "all"
+          ? CANVAS_BASE_WIDTH
+          : Math.max(640, Math.min(2400, CANVAS_BASE_WIDTH * rangeRatio));
     const source = buildStandaloneSvg(
       svgRef.current,
       trackLayouts,
       canvasWidth,
       canvasHeight,
+      labelWidth,
+      range,
+      project.durationPs,
+      outputTimelineWidth,
     );
     downloadFile(
       `${project.name.toLowerCase().replace(/\s+/g, "-")}.svg`,
       source,
       "image/svg+xml",
     );
-    setStatusMessage("SVG exported");
+    setExportPanelOpen(false);
+    setStatusMessage(
+      `SVG exported · ${formatAxisTime(range.startPs)}–${formatAxisTime(range.endPs)}`,
+    );
   };
 
   const openProject = (event: ChangeEvent<HTMLInputElement>) => {
@@ -827,8 +1070,16 @@ function App() {
           setStatusMessage("This project uses an unsupported schema");
           return;
         }
-        setProject(loaded);
+        const normalizedProject: TimingProject = {
+          ...loaded,
+          durationPs: Math.max(1, loaded.durationPs || initialProject.durationPs),
+          signalGroups: loaded.signalGroups ?? [],
+        };
+        setProject(normalizedProject);
         setSelectedId(loaded.signals[0]?.id ?? "");
+        setExportStartPs(0);
+        setExportEndPs(normalizedProject.durationPs);
+        setIsLabelWidthAuto(true);
         setStatusMessage(`${loaded.name} opened`);
       } catch {
         setStatusMessage("Could not read this project file");
@@ -836,6 +1087,131 @@ function App() {
     };
     reader.readAsText(file);
     event.target.value = "";
+  };
+
+  const renderSignalGroup = (group?: SignalGroup) => {
+    const groupId = group?.id ?? "ungrouped";
+    const knownGroupIds = new Set(signalGroups.map((item) => item.id));
+    const belongsToGroup = (signal: Signal) =>
+      group
+        ? signal.groupId === group.id
+        : !signal.groupId || !knownGroupIds.has(signal.groupId);
+    const allGroupSignals = project.signals.filter(belongsToGroup);
+    const signals = matchingSignals.filter(belongsToGroup);
+    if (signals.length === 0 && normalizedSignalSearch) return null;
+    if (signals.length === 0 && !group) return null;
+    const collapsed = collapsedGroups.has(groupId) && !normalizedSignalSearch;
+    const allVisible =
+      allGroupSignals.length > 0 &&
+      allGroupSignals.every((signal) => signal.visible);
+
+    return (
+      <section className="signal-group" key={groupId}>
+        <div className="signal-group-heading">
+          <UnstyledButton
+            className="signal-group-toggle"
+            aria-expanded={!collapsed}
+            onClick={() => toggleGroupCollapsed(groupId)}
+          >
+            {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+            <span>{group?.name ?? "Ungrouped"}</span>
+            <small>{signals.length}</small>
+          </UnstyledButton>
+          <div className="signal-group-actions">
+            <Tooltip label={allVisible ? "Hide group" : "Show group"}>
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                size="sm"
+                disabled={allGroupSignals.length === 0}
+                aria-label={`${allVisible ? "Hide" : "Show"} ${group?.name ?? "ungrouped"} signals`}
+                onClick={() =>
+                  setSignalsVisibility(
+                    allGroupSignals.map((signal) => signal.id),
+                    !allVisible,
+                  )
+                }
+              >
+                {allVisible ? <EyeOff size={14} /> : <Eye size={14} />}
+              </ActionIcon>
+            </Tooltip>
+            {group && (
+              <Tooltip label="Remove group">
+                <ActionIcon
+                  variant="subtle"
+                  color="red"
+                  size="sm"
+                  aria-label={`Remove ${group.name} group`}
+                  onClick={() => deleteSignalGroup(group.id)}
+                >
+                  <Trash2 size={13} />
+                </ActionIcon>
+              </Tooltip>
+            )}
+          </div>
+        </div>
+        {!collapsed && (
+          <div className="signal-manager-list">
+            {signals.length === 0 ? (
+              <div className="signal-manager-empty">No signals in this group</div>
+            ) : (
+              signals.map((signal) => (
+                <div className="signal-manager-row" key={signal.id}>
+                  <ActionIcon
+                    variant="subtle"
+                    color={signal.visible ? "violet" : "gray"}
+                    size="sm"
+                    aria-label={`${signal.visible ? "Hide" : "Show"} ${signal.name}`}
+                    onClick={() => setSignalVisibility(signal.id, !signal.visible)}
+                  >
+                    {signal.visible ? <Eye size={14} /> : <EyeOff size={14} />}
+                  </ActionIcon>
+                  <UnstyledButton
+                    className="signal-manager-name"
+                    title={signal.name}
+                    onClick={() => {
+                      setSelectedId(signal.id);
+                      setSignalsPanelOpen(false);
+                    }}
+                  >
+                    <span
+                      className="signal-color-dot"
+                      style={{ backgroundColor: signal.color }}
+                    />
+                    <span>{signal.name}</span>
+                  </UnstyledButton>
+                  <Select
+                    className="signal-group-select"
+                    aria-label={`Group for ${signal.name}`}
+                    value={signal.groupId ?? ""}
+                    data={[
+                      { label: "Ungrouped", value: "" },
+                      ...signalGroups.map((item) => ({
+                        label: item.name,
+                        value: item.id,
+                      })),
+                    ]}
+                    allowDeselect={false}
+                    withCheckIcon={false}
+                    size="xs"
+                    classNames={{
+                      dropdown: "signal-group-dropdown",
+                      option: "signal-group-option",
+                    }}
+                    comboboxProps={{ position: "bottom-end", shadow: "md" }}
+                    onChange={(value) =>
+                      updateSignal(signal.id, {
+                        groupId: value || undefined,
+                      })
+                    }
+                  />
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </section>
+    );
   };
 
   return (
@@ -896,38 +1272,97 @@ function App() {
               {colorScheme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
             </ActionIcon>
           </Tooltip>
-          <Button
-            leftSection={<Download size={16} />}
-            size="sm"
-            onClick={exportSvg}
+          <Popover
+            opened={exportPanelOpen}
+            onChange={setExportPanelOpen}
+            position="bottom-end"
+            width={356}
+            shadow="md"
+            withArrow
           >
-            Export SVG
-          </Button>
+            <Popover.Target>
+              <Button
+                leftSection={<Download size={16} />}
+                size="sm"
+                onClick={() => setExportPanelOpen((opened) => !opened)}
+              >
+                Export SVG
+              </Button>
+            </Popover.Target>
+            <Popover.Dropdown className="export-panel">
+              <div className="export-panel-heading">
+                <div>
+                  <strong>Export SVG</strong>
+                  <span>Choose the exact timeline to include</span>
+                </div>
+              </div>
+              <SegmentedControl
+                fullWidth
+                value={exportMode}
+                onChange={(value) => setExportMode(value as ExportMode)}
+                data={[
+                  { label: "Current view", value: "view" },
+                  { label: "Time range", value: "range" },
+                  { label: "All time", value: "all" },
+                ]}
+              />
+              {exportMode === "range" && (
+                <div className="export-range-fields">
+                  <NumberInput
+                    label="Start"
+                    suffix=" ps"
+                    min={0}
+                    max={project.durationPs}
+                    value={exportStartPs}
+                    onChange={(value) => setExportStartPs(Number(value) || 0)}
+                  />
+                  <NumberInput
+                    label="End"
+                    suffix=" ps"
+                    min={0}
+                    max={project.durationPs}
+                    value={exportEndPs}
+                    error={exportEndPs <= exportStartPs ? "After start" : undefined}
+                    onChange={(value) =>
+                      setExportEndPs(Number(value) || project.durationPs)
+                    }
+                  />
+                </div>
+              )}
+              <div className="export-summary">
+                {exportMode === "view" && "Exports the timeline currently visible in the canvas."}
+                {exportMode === "range" &&
+                  `${formatAxisTime(exportStartPs)} – ${formatAxisTime(exportEndPs)}`}
+                {exportMode === "all" &&
+                  `Exports the full ${formatAxisTime(project.durationPs)} project.`}
+              </div>
+              <Button fullWidth leftSection={<Download size={15} />} onClick={exportSvg}>
+                Export SVG
+              </Button>
+            </Popover.Dropdown>
+          </Popover>
         </div>
         {desktopPlatform === "win32" && (
           <div className="window-controls" aria-label="Window controls">
-            <button
-              type="button"
+            <UnstyledButton
               aria-label="Minimize window"
               onClick={() => window.chronaWindow?.minimize()}
             >
               <Minus size={16} />
-            </button>
-            <button
-              type="button"
+            </UnstyledButton>
+            <UnstyledButton
               aria-label={isWindowMaximized ? "Restore window" : "Maximize window"}
               onClick={() => window.chronaWindow?.toggleMaximize()}
             >
               {isWindowMaximized ? <Copy size={13} /> : <Square size={13} />}
-            </button>
-            <button
-              type="button"
+            </UnstyledButton>
+            <UnstyledButton
               className="window-close"
               aria-label="Close window"
               onClick={() => window.chronaWindow?.close()}
             >
               <X size={17} />
-            </button>
+            </UnstyledButton>
           </div>
         )}
       </header>
@@ -945,75 +1380,127 @@ function App() {
               </div>
             </div>
             <div className="editor-actions">
-              <Menu shadow="md" width={220} position="bottom-end">
-                <Menu.Target>
+              <div className="duration-control">
+                <span>Duration</span>
+                <NumberInput
+                  aria-label="Waveform duration in picoseconds"
+                  suffix=" ps"
+                  min={1}
+                  step={100}
+                  value={project.durationPs}
+                  onChange={(value) => {
+                    const durationPs = Math.max(1, Number(value) || 1);
+                    const previousDurationPs = project.durationPs;
+                    setProject((current) => ({ ...current, durationPs }));
+                    setExportEndPs((current) =>
+                      current === previousDurationPs
+                        ? durationPs
+                        : Math.min(durationPs, current),
+                    );
+                  }}
+                  onBlur={() => setStatusMessage("Waveform duration updated")}
+                />
+              </div>
+
+              <Popover
+                opened={signalsPanelOpen}
+                onChange={setSignalsPanelOpen}
+                width={390}
+                position="bottom-end"
+                shadow="md"
+                withArrow
+              >
+                <Popover.Target>
                   <Button
                     variant="subtle"
                     color="gray"
                     size="compact-sm"
-                    leftSection={<Eye size={15} />}
+                    leftSection={<Layers3 size={15} />}
+                    onClick={() => setSignalsPanelOpen((opened) => !opened)}
                   >
                     Signals
                     {project.signals.some((signal) => !signal.visible) &&
                       ` · ${project.signals.filter((signal) => !signal.visible).length} hidden`}
                   </Button>
-                </Menu.Target>
-                <Menu.Dropdown>
-                  <Menu.Label>Signal visibility</Menu.Label>
-                  {project.signals.length === 0 ? (
-                    <Menu.Item disabled>No signals yet</Menu.Item>
-                  ) : (
-                    project.signals.map((signal) => (
-                      <Menu.Item
-                        key={signal.id}
-                        closeMenuOnClick={false}
-                        leftSection={
-                          signal.visible ? <Eye size={15} /> : <EyeOff size={15} />
-                        }
-                        rightSection={signal.visible ? "Shown" : "Hidden"}
+                </Popover.Target>
+                <Popover.Dropdown className="signals-panel">
+                  <div className="signals-panel-heading">
+                    <div>
+                      <strong>Signal manager</strong>
+                      <span>Search, group and control visibility</span>
+                    </div>
+                    <div>
+                      <Button
+                        variant="subtle"
+                        color="gray"
+                        size="compact-xs"
+                        disabled={project.signals.length === 0}
                         onClick={() =>
-                          setSignalVisibility(signal.id, !signal.visible)
+                          setSignalsVisibility(
+                            project.signals.map((signal) => signal.id),
+                            true,
+                          )
                         }
-                      >
-                        {signal.name}
-                      </Menu.Item>
-                    ))
-                  )}
-                  {project.signals.length > 0 && (
-                    <>
-                      <Menu.Divider />
-                      <Menu.Item
-                        onClick={() => {
-                          setProject((current) => ({
-                            ...current,
-                            signals: current.signals.map((signal) => ({
-                              ...signal,
-                              visible: true,
-                            })),
-                          }));
-                          setStatusMessage("All signals shown");
-                        }}
                       >
                         Show all
-                      </Menu.Item>
-                      <Menu.Item
-                        onClick={() => {
-                          setProject((current) => ({
-                            ...current,
-                            signals: current.signals.map((signal) => ({
-                              ...signal,
-                              visible: false,
-                            })),
-                          }));
-                          setStatusMessage("All signals hidden");
-                        }}
+                      </Button>
+                      <Button
+                        variant="subtle"
+                        color="gray"
+                        size="compact-xs"
+                        disabled={project.signals.length === 0}
+                        onClick={() =>
+                          setSignalsVisibility(
+                            project.signals.map((signal) => signal.id),
+                            false,
+                          )
+                        }
                       >
                         Hide all
-                      </Menu.Item>
-                    </>
-                  )}
-                </Menu.Dropdown>
-              </Menu>
+                      </Button>
+                    </div>
+                  </div>
+                  <TextInput
+                    aria-label="Search signals"
+                    placeholder="Search signal names"
+                    leftSection={<Search size={14} />}
+                    value={signalSearch}
+                    onChange={(event) => setSignalSearch(event.target.value)}
+                  />
+                  <div className="signal-groups-scroll">
+                    {project.signals.length === 0 ? (
+                      <div className="signal-manager-empty">Add a signal to start organizing.</div>
+                    ) : matchingSignals.length === 0 ? (
+                      <div className="signal-manager-empty">No signals match “{signalSearch}”.</div>
+                    ) : (
+                      <>
+                        {signalGroups.map((group) => renderSignalGroup(group))}
+                        {renderSignalGroup()}
+                      </>
+                    )}
+                  </div>
+                  <div className="create-group-row">
+                    <TextInput
+                      aria-label="New group name"
+                      placeholder="New group name"
+                      value={newGroupName}
+                      onChange={(event) => setNewGroupName(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") createSignalGroup();
+                      }}
+                    />
+                    <Button
+                      variant="light"
+                      size="sm"
+                      leftSection={<FolderPlus size={14} />}
+                      disabled={!newGroupName.trim()}
+                      onClick={createSignalGroup}
+                    >
+                      Group
+                    </Button>
+                  </div>
+                </Popover.Dropdown>
+              </Popover>
 
               <Menu shadow="md" width={180} position="bottom-end">
                 <Menu.Target>
@@ -1063,15 +1550,19 @@ function App() {
           >
             <div
               className="canvas-content"
-              style={{ width: LABEL_WIDTH + canvasWidth, minHeight: canvasHeight }}
+              style={{
+                gridTemplateColumns: `${labelWidth}px auto`,
+                width: labelWidth + canvasWidth,
+                minHeight: canvasHeight,
+              }}
             >
               <div
                 className="fixed-signal-labels"
-                style={{ width: LABEL_WIDTH, height: canvasHeight }}
+                style={{ width: labelWidth, height: canvasHeight }}
               >
                 <div className="axis-label">
                   <span>TRACKS</span>
-                  <small>Drag to reorder</small>
+                  <small>{isLabelWidthAuto ? "Auto · P85" : `${Math.round(labelWidth)} px`}</small>
                 </div>
                 {trackLayouts.map(({ height, signal }) => (
                   <div
@@ -1101,8 +1592,7 @@ function App() {
                       size={14}
                       aria-hidden="true"
                     />
-                    <button
-                      type="button"
+                    <UnstyledButton
                       className="track-select"
                       aria-pressed={signal.id === selectedId}
                       onClick={() => setSelectedId(signal.id)}
@@ -1118,72 +1608,106 @@ function App() {
                       }}
                     >
                       <span>{signal.name}</span>
-                    </button>
-                    <Tooltip label={`Duplicate ${signal.name}`}>
-                      <ActionIcon
-                        variant="subtle"
-                        color="gray"
-                        size="sm"
-                        aria-label={`Duplicate ${signal.name}`}
-                        onClick={() => duplicateSignal(signal.id)}
-                      >
-                        <Copy size={14} />
-                      </ActionIcon>
-                    </Tooltip>
-                    <Popover
-                      opened={pendingDeleteId === signal.id}
-                      onChange={(opened) =>
-                        setPendingDeleteId(opened ? signal.id : null)
-                      }
-                      position="bottom-end"
-                      width={168}
-                      withArrow
-                      shadow="md"
-                    >
-                      <Popover.Target>
+                    </UnstyledButton>
+                    <div className="track-actions">
+                      <Tooltip label={`Duplicate ${signal.name}`}>
                         <ActionIcon
                           variant="subtle"
-                          color="red"
+                          color="gray"
                           size="sm"
-                          aria-label={`Delete ${signal.name}`}
-                          onClick={() => setPendingDeleteId(signal.id)}
+                          aria-label={`Duplicate ${signal.name}`}
+                          onClick={() => duplicateSignal(signal.id)}
                         >
-                          <Trash2 size={14} />
+                          <Copy size={14} />
                         </ActionIcon>
-                      </Popover.Target>
-                      <Popover.Dropdown className="delete-confirmation">
-                        <span>Delete {signal.name}?</span>
-                        <div>
-                          <Tooltip label="Cancel">
-                            <ActionIcon
-                              variant="subtle"
-                              color="gray"
-                              size="sm"
-                              aria-label={`Cancel deleting ${signal.name}`}
-                              onClick={() => setPendingDeleteId(null)}
-                            >
-                              <X size={14} />
-                            </ActionIcon>
-                          </Tooltip>
-                          <Tooltip label="Confirm delete">
-                            <ActionIcon
-                              variant="light"
-                              color="red"
-                              size="sm"
-                              aria-label={`Confirm deleting ${signal.name}`}
-                              onClick={() => {
-                                deleteSignal(signal.id);
-                                setPendingDeleteId(null);
-                              }}
-                            >
-                              <Check size={14} />
-                            </ActionIcon>
-                          </Tooltip>
-                        </div>
-                      </Popover.Dropdown>
-                    </Popover>
+                      </Tooltip>
+                      <Popover
+                        opened={pendingDeleteId === signal.id}
+                        onChange={(opened) =>
+                          setPendingDeleteId(opened ? signal.id : null)
+                        }
+                        position="bottom-end"
+                        width={168}
+                        withArrow
+                        shadow="md"
+                      >
+                        <Popover.Target>
+                          <ActionIcon
+                            variant="subtle"
+                            color="red"
+                            size="sm"
+                            aria-label={`Delete ${signal.name}`}
+                            onClick={() => setPendingDeleteId(signal.id)}
+                          >
+                            <Trash2 size={14} />
+                          </ActionIcon>
+                        </Popover.Target>
+                        <Popover.Dropdown className="delete-confirmation">
+                          <span>Delete {signal.name}?</span>
+                          <div>
+                            <Tooltip label="Cancel">
+                              <ActionIcon
+                                variant="subtle"
+                                color="gray"
+                                size="sm"
+                                aria-label={`Cancel deleting ${signal.name}`}
+                                onClick={() => setPendingDeleteId(null)}
+                              >
+                                <X size={14} />
+                              </ActionIcon>
+                            </Tooltip>
+                            <Tooltip label="Confirm delete">
+                              <ActionIcon
+                                variant="light"
+                                color="red"
+                                size="sm"
+                                aria-label={`Confirm deleting ${signal.name}`}
+                                onClick={() => {
+                                  deleteSignal(signal.id);
+                                  setPendingDeleteId(null);
+                                }}
+                              >
+                                <Check size={14} />
+                              </ActionIcon>
+                            </Tooltip>
+                          </div>
+                        </Popover.Dropdown>
+                      </Popover>
+                    </div>
                   </div>
                 ))}
+                <div
+                  className="signal-column-resizer"
+                  role="separator"
+                  aria-label="Resize signal column"
+                  aria-orientation="vertical"
+                  aria-valuemin={MIN_LABEL_WIDTH}
+                  aria-valuemax={MAX_LABEL_WIDTH}
+                  aria-valuenow={Math.round(labelWidth)}
+                  title="Drag to resize · Double-click to auto fit"
+                  tabIndex={0}
+                  onPointerDown={startLabelResize}
+                  onPointerMove={moveLabelResize}
+                  onPointerUp={endLabelResize}
+                  onPointerCancel={endLabelResize}
+                  onDoubleClick={resetLabelWidth}
+                  onKeyDown={(event) => {
+                    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                      event.preventDefault();
+                      setIsLabelWidthAuto(false);
+                      setLabelWidth((current) =>
+                        Math.min(
+                          MAX_LABEL_WIDTH,
+                          Math.max(
+                            MIN_LABEL_WIDTH,
+                            current + (event.key === "ArrowRight" ? 8 : -8),
+                          ),
+                        ),
+                      );
+                    }
+                    if (event.key === "Home") resetLabelWidth();
+                  }}
+                />
               </div>
 
               <svg

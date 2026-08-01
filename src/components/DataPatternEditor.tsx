@@ -1,4 +1,12 @@
-import { ActionIcon, Button, Menu, Tooltip } from "@mantine/core";
+import {
+  ActionIcon,
+  Button,
+  Menu,
+  NumberInput,
+  Select,
+  TextInput,
+  Tooltip,
+} from "@mantine/core";
 import {
   Binary,
   ChevronDown,
@@ -270,9 +278,11 @@ export function DataPatternEditor({
               onDrop={(event) => dropSegment(event, segment.id)}
             >
               <div className="segment-toolbar">
-                <button
-                  type="button"
+                <ActionIcon
                   className="segment-grip"
+                  variant="subtle"
+                  color="gray"
+                  size={28}
                   draggable
                   aria-label={`Reorder segment ${index + 1}`}
                   onDragStart={() => setDraggedId(segment.id)}
@@ -292,22 +302,27 @@ export function DataPatternEditor({
                   }}
                 >
                   <GripVertical size={15} aria-hidden="true" />
-                </button>
+                </ActionIcon>
                 <span className="segment-index">
                   {String(index + 1).padStart(2, "0")}
                 </span>
-                <select
+                <Select
                   className="segment-kind-select"
                   value={segment.kind}
+                  data={[
+                    { value: "range", label: "Range" },
+                    { value: "logic", label: "Logic" },
+                    { value: "symbols", label: "Symbols" },
+                  ]}
+                  allowDeselect={false}
+                  withCheckIcon={false}
+                  size="xs"
                   aria-label={`Segment ${index + 1} type`}
-                  onChange={(event) =>
-                    changeKind(segment.id, event.target.value as SegmentKind)
+                  comboboxProps={{ shadow: "md" }}
+                  onChange={(value) =>
+                    value && changeKind(segment.id, value as SegmentKind)
                   }
-                >
-                  <option value="range">Range</option>
-                  <option value="logic">Logic</option>
-                  <option value="symbols">Symbols</option>
-                </select>
+                />
                 <div className="segment-actions">
                   <Tooltip label="Duplicate segment">
                     <ActionIcon
@@ -338,56 +353,65 @@ export function DataPatternEditor({
               {segment.kind === "range" && (
                 <div className="segment-fields range-fields">
                   <SegmentField label="Prefix" error={errors.prefix}>
-                    <input
+                    <TextInput
                       value={segment.prefix}
                       aria-label="Range prefix"
-                      className={errors.prefix ? "invalid" : ""}
+                      error={Boolean(errors.prefix)}
+                      size="xs"
                       onChange={(event) =>
                         patchDraft(segment.id, { prefix: event.target.value })
                       }
                     />
                   </SegmentField>
                   <SegmentField label="From" error={errors.from}>
-                    <input
-                      inputMode="numeric"
+                    <NumberInput
                       value={segment.from}
                       aria-label="Range start"
-                      className={errors.from ? "invalid" : ""}
-                      onChange={(event) =>
-                        patchDraft(segment.id, { from: event.target.value })
+                      error={Boolean(errors.from)}
+                      size="xs"
+                      allowDecimal={false}
+                      hideControls
+                      onChange={(value) =>
+                        patchDraft(segment.id, { from: String(value) })
                       }
                     />
                   </SegmentField>
                   <SegmentField label="To" error={errors.to}>
-                    <input
-                      inputMode="numeric"
+                    <NumberInput
                       value={segment.to}
                       aria-label="Range end"
-                      className={errors.to ? "invalid" : ""}
-                      onChange={(event) =>
-                        patchDraft(segment.id, { to: event.target.value })
+                      error={Boolean(errors.to)}
+                      size="xs"
+                      allowDecimal={false}
+                      hideControls
+                      onChange={(value) =>
+                        patchDraft(segment.id, { to: String(value) })
                       }
                     />
                   </SegmentField>
                   <SegmentField label="Step" error={errors.step}>
-                    <input
-                      inputMode="numeric"
+                    <NumberInput
                       value={segment.step}
                       aria-label="Range step"
-                      className={errors.step ? "invalid" : ""}
-                      onChange={(event) =>
-                        patchDraft(segment.id, { step: event.target.value })
+                      error={Boolean(errors.step)}
+                      size="xs"
+                      allowDecimal={false}
+                      hideControls
+                      onChange={(value) =>
+                        patchDraft(segment.id, { step: String(value) })
                       }
                     />
                   </SegmentField>
                   <SegmentField label="Repeat" error={errors.repeat}>
-                    <input
-                      inputMode="numeric"
+                    <NumberInput
                       value={segment.repeat}
                       aria-label="Range repeat count"
-                      className={errors.repeat ? "invalid" : ""}
-                      onChange={(event) =>
-                        patchDraft(segment.id, { repeat: event.target.value })
+                      error={Boolean(errors.repeat)}
+                      size="xs"
+                      allowDecimal={false}
+                      hideControls
+                      onChange={(value) =>
+                        patchDraft(segment.id, { repeat: String(value) })
                       }
                     />
                   </SegmentField>
@@ -397,24 +421,27 @@ export function DataPatternEditor({
               {segment.kind === "logic" && (
                 <div className="segment-fields two-fields">
                   <SegmentField label="Pattern" error={errors.values}>
-                    <input
+                    <TextInput
                       value={segment.values}
                       placeholder="01XZ"
                       aria-label="Logic pattern"
-                      className={errors.values ? "invalid" : ""}
+                      error={Boolean(errors.values)}
+                      size="xs"
                       onChange={(event) =>
                         patchDraft(segment.id, { values: event.target.value })
                       }
                     />
                   </SegmentField>
                   <SegmentField label="Repeat" error={errors.repeat}>
-                    <input
-                      inputMode="numeric"
+                    <NumberInput
                       value={segment.repeat}
                       aria-label="Logic repeat count"
-                      className={errors.repeat ? "invalid" : ""}
-                      onChange={(event) =>
-                        patchDraft(segment.id, { repeat: event.target.value })
+                      error={Boolean(errors.repeat)}
+                      size="xs"
+                      allowDecimal={false}
+                      hideControls
+                      onChange={(value) =>
+                        patchDraft(segment.id, { repeat: String(value) })
                       }
                     />
                   </SegmentField>
@@ -424,24 +451,27 @@ export function DataPatternEditor({
               {segment.kind === "symbols" && (
                 <div className="segment-fields symbols-fields">
                   <SegmentField label="Values" error={errors.values}>
-                    <input
+                    <TextInput
                       value={segment.values}
                       placeholder="IDLE READ D0"
                       aria-label="Symbol values"
-                      className={errors.values ? "invalid" : ""}
+                      error={Boolean(errors.values)}
+                      size="xs"
                       onChange={(event) =>
                         patchDraft(segment.id, { values: event.target.value })
                       }
                     />
                   </SegmentField>
                   <SegmentField label="Repeat" error={errors.repeat}>
-                    <input
-                      inputMode="numeric"
+                    <NumberInput
                       value={segment.repeat}
                       aria-label="Symbol repeat count"
-                      className={errors.repeat ? "invalid" : ""}
-                      onChange={(event) =>
-                        patchDraft(segment.id, { repeat: event.target.value })
+                      error={Boolean(errors.repeat)}
+                      size="xs"
+                      allowDecimal={false}
+                      hideControls
+                      onChange={(value) =>
+                        patchDraft(segment.id, { repeat: String(value) })
                       }
                     />
                   </SegmentField>

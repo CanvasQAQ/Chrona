@@ -4,9 +4,15 @@ export interface SignalBase {
   id: string;
   name: string;
   kind: SignalKind;
+  groupId?: string;
   startPs: number;
   visible: boolean;
   color: string;
+}
+
+export interface SignalGroup {
+  id: string;
+  name: string;
 }
 
 export interface ClockSignal extends SignalBase {
@@ -61,6 +67,7 @@ export interface TimingProject {
   name: string;
   durationPs: number;
   signals: Signal[];
+  signalGroups?: SignalGroup[];
   constraintDraft: TimingConstraintDraft;
 }
 
