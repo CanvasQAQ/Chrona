@@ -1008,13 +1008,13 @@ button,
 
 .data-unknown-fill {
   fill: url("#unknown-hatch");
-  stroke: color-mix(in srgb, var(--danger) 72%, var(--text));
+  stroke: color-mix(in srgb, var(--text-soft) 78%, var(--text));
   stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
 }
 
 .unknown-hatch-line {
-  stroke: color-mix(in srgb, var(--danger) 62%, transparent);
+  stroke: color-mix(in srgb, var(--text-faint) 58%, transparent);
   stroke-width: 3;
 }
 

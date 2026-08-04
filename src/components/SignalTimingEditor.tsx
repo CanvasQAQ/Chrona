@@ -35,10 +35,6 @@ function numericValue(value: string | number, fallback: number): number {
   return Number.isFinite(numeric) ? numeric : fallback;
 }
 
-function edgeLabel(signal?: Signal): string {
-  return signal?.kind === "clock" ? "Rising edge" : "Transition";
-}
-
 function edgeCount(signal: Signal | undefined, durationPs: number): number {
   return signal ? Math.max(1, signalEdges(signal, durationPs).length) : 1;
 }
@@ -151,7 +147,7 @@ export function SignalTimingEditor({
         />
         <div className="timing-field-pair">
           <NumberInput
-            label={`Source ${edgeLabel(delaySource)}`}
+            label="Source edge"
             min={1}
             max={sourceEdgeCount}
             step={1}
@@ -167,7 +163,7 @@ export function SignalTimingEditor({
             }
           />
           <NumberInput
-            label={`Target ${edgeLabel(selected)}`}
+            label="Target edge"
             min={1}
             max={targetEdgeCount}
             step={1}

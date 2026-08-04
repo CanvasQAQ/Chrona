@@ -1026,9 +1026,9 @@ function App() {
             targetSignalId: selected.id,
             sourceEdge: 1,
             targetEdge: 1,
-            minPs: 50,
-            currentPs: 100,
-            maxPs: 200,
+            minPs: 0,
+            currentPs: 10,
+            maxPs: 20,
           },
         ],
       };

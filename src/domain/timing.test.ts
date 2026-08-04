@@ -13,6 +13,7 @@ import {
   resolveEdgeDelay,
   resolveLinkedTiming,
   resolveTimingConstraint,
+  signalEdges,
   signalEdgesByPolarity,
   type ClockSignal,
   type DataSignal,
@@ -129,6 +130,10 @@ describe("timing engine", () => {
     expect(clockEdges(clock, 3000)).toEqual([0, 1000, 2000, 3000]);
   });
 
+  it("numbers every clock edge chronologically for delay links", () => {
+    expect(signalEdges(clock, 2200)).toEqual([0, 500, 1000, 1500, 2000]);
+  });
+
   it("emits symbolic data transitions only when the value changes", () => {
     expect(dataEdges(data, 4000)).toEqual([1600, 3200, 4000]);
   });
@@ -145,11 +150,11 @@ describe("timing engine", () => {
     });
 
     expect(resolved).toEqual({
-      sourceTimePs: 1000,
-      targetBaseTimePs: 1000,
-      targetTimePs: 1140,
-      minTimePs: 1080,
-      maxTimePs: 1220,
+      sourceTimePs: 500,
+      targetBaseTimePs: 500,
+      targetTimePs: 640,
+      minTimePs: 580,
+      maxTimePs: 720,
       targetShiftPs: 140,
     });
   });
@@ -167,7 +172,7 @@ describe("timing engine", () => {
 
     expect(resolved?.sourceTimePs).toBe(1600);
     expect(resolved?.targetTimePs).toBe(1800);
-    expect(resolved?.targetShiftPs).toBe(800);
+    expect(resolved?.targetShiftPs).toBe(1300);
   });
 
   it("propagates an upstream whole-signal shift into the next delay", () => {
@@ -197,9 +202,9 @@ describe("timing engine", () => {
     });
 
     expect(resolved.signalShiftsPs.capture).toBe(140);
-    expect(resolved.data?.sourceTimePs).toBe(1140);
-    expect(resolved.data?.targetTimePs).toBe(1340);
-    expect(resolved.signalShiftsPs.data).toBe(-260);
+    expect(resolved.data?.sourceTimePs).toBe(640);
+    expect(resolved.data?.targetTimePs).toBe(840);
+    expect(resolved.signalShiftsPs.data).toBe(-760);
   });
 
   it("resolves independent per-signal delay relationships", () => {
@@ -228,8 +233,8 @@ describe("timing engine", () => {
     ]);
 
     expect(resolved.byId["capture-delay"].targetShiftPs).toBe(150);
-    expect(resolved.byId["data-delay"].sourceTimePs).toBe(1150);
-    expect(resolved.byId["data-delay"].targetTimePs).toBe(1400);
+    expect(resolved.byId["data-delay"].sourceTimePs).toBe(650);
+    expect(resolved.byId["data-delay"].targetTimePs).toBe(900);
   });
 
   it("flags a constrained edge inside its setup and hold window", () => {

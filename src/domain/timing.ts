@@ -62,9 +62,9 @@ export interface EdgeDelayLink {
   label?: string;
   sourceSignalId: string;
   targetSignalId: string;
-  /** One-based index into the visible rising edges / data transitions. */
+  /** One-based index into every visible edge, ordered by time. */
   sourceEdge: number;
-  /** One-based index into the visible rising edges / data transitions. */
+  /** One-based index into every visible edge, ordered by time. */
   targetEdge: number;
   minPs: number;
   currentPs: number;
@@ -418,7 +418,7 @@ export function signalEdgesByPolarity(
 
 export function signalEdges(signal: Signal, durationPs: number): number[] {
   return signal.kind === "clock"
-    ? clockEdges(signal, durationPs)
+    ? signalEdgesByPolarity(signal, durationPs, "both")
     : dataEdges(signal, durationPs);
 }
 

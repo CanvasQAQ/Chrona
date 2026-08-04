@@ -147,7 +147,9 @@ Signal Timing 用于制作能够解释 Delay 和约束关系的 Timing Diagram �
 - Signal 的 Start、Period、Phase 和 Pattern 先生成基础波形
 - 用户先选中目标 Signal，再为它添加 Source Delay
 - 每条关系分别指定任意类型的 Source Signal/edge，以及当前目标 Signal/edge
+- Delay 不区分边沿极性：Clock 的上升沿与下降沿、Data 的所有 transition 均按时间顺序统一编号，直接指定 Source 第几个边沿到 Target 第几个边沿
 - 每条 Edge Delay 保存 Min、Current 和 Max
+- 新建 Delay 的默认范围为 0–20 ps，Current 默认为 10 ps
 - 每条 Delay 保存独立的 Diagram Label；新建关系按 `t1`、`t2`、`t3` 自动命名，用户可改为任意短名称
 - 选中的边沿是计算锚点：目标锚点时间等于 Source edge 时间加 Current Delay
 - 锚点结果被换算为目标 Signal 的派生 Start offset，目标整条波形随之平移，而不是只推动一个边沿

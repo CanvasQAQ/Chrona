@@ -203,7 +203,9 @@ UI 时间输入支持：
 系统支持：
 
 - 选中任意 Signal 后，为其设置任意类型的 Source Signal 和两侧 edge
+- Delay 不区分边沿极性，Clock 上升沿/下降沿与 Data transition 均按时间顺序统一编号
 - 每条关系的 Min / Current / Max Delay
+- 新建 Delay 默认 Min 0 ps、Current 10 ps、Max 20 ps
 - 每条 Delay 带可编辑的 Diagram Label，新建时自动按 `t1`、`t2` 等顺序命名
 - Current Delay 通过所选边沿锚点计算目标 Signal 的派生 Start offset，并平移整条目标波形
 - Target 可继续作为另一条关系的 Source，使多个 Signal Delay 按依赖传播
