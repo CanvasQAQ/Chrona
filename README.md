@@ -2,11 +2,12 @@
 
 Chrona 是一款面向硬件设计、验证和系统工程师的可交互 Timing Diagram 编辑器。
 
-当前阶段：V1 垂直切片开发中。
+当前版本：v0.2.0。
 
 ## 当前能力
 
 - 创建并编辑 Clock / Data 波形，使用统一的 `ps` 时间模型
+- 从指定 Clock 与 Data 实时派生 DFF / Latch 输出；支持采样边沿或透明电平，以及 C→Q / D→Q 的 Min / Current / Max 延迟
 - 为任意目标 Signal 配置来自任意 Source Signal 的 Delay，并通过锚点边沿联动整条目标波形
 - 使用 Min / Current / Max 表达 Delay 范围，并为图中测量线设置 `t1`、`t2` 等自定义名称
 - 为任意 Signal 添加多边沿 Setup/Hold 约束；目标边沿进入窗口时，以低干扰的半透明红色区域反馈
@@ -15,11 +16,22 @@ Chrona 是一款面向硬件设计、验证和系统工程师的可交互 Timing
 
 Chrona 的 Timing 功能用于制作清晰、可复现的调试示意图，不替代 STA，也不自动判断路径、裕量或问题来源。
 
+## Sequential Derived Data
+
+当工程中至少存在一个 Clock 和一个 Data 后，可从 `Add → Derived data` 创建持续联动的 Q：
+
+- DFF 支持 Rising/Falling 采样边沿和 C→Q Min/Current/Max
+- Latch 支持 High/Low 透明电平，并分别设置 C→Q、D→Q Min/Current/Max
+- Current 生成实际 Q 波形；Min/Max 在每个输出边沿显示可能到达范围
+- Q 可以继续参与 Delay、Setup/Hold，或作为下一级 DFF/Latch 的 Data 输入
+- Delay 与 Sequential Derivation 使用统一依赖图，延迟后的 CLK、Data、Q 会继续向下游传播
+
 ## 项目文档
 
 - [产品需求文档（PRD）](docs/PRD.md)
 - [V1 交互修订说明](docs/INTERACTION_SPEC.md)
 - [工程约定](docs/CONVENTIONS.md)
+- [版本记录](CHANGELOG.md)
 
 ## 本地运行
 

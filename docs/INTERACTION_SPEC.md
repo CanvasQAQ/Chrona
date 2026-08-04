@@ -195,3 +195,16 @@ Setup/Hold Constraint 同样从当前选中的目标 Signal 添加，并独立�
 ### 7.5 Delay 动画
 
 旧版从左向右扫描的 Timing Sweep 已删除，不作为兼容目标。新的动态效果由用户调整各 Signal 的 Current Delay 产生；动画或拖动只改变 Delay 参数和渲染时的派生 Start offset，不覆盖 Signal 的基础时序数据。
+
+## 8. Sequential Derived Data
+
+- Add 菜单在工程至少存在一个 Clock 和一个 Data 后开放 Derived Data
+- 新建输出默认使用当前选中的 Data 和第一个 Clock，并立即选中新 Q
+- 属性面板用 DFF/Latch 分段控件切换器件；DFF 显示 Sampling Edge 和 C→Q，Latch 显示 Transparent Level、C→Q 与 D→Q
+- 每个 Delay Range 使用 Min、Current、Max 数值输入和 Current 滑块，始终满足 `0 ≤ Min ≤ Current ≤ Max`
+- 派生 Data 不显示 Start、Rate 或 Pattern Builder；其波形由源信号和衍生参数实时计算
+- 仅选中派生 Latch 时显示低对比度透明区间；每个输出边沿以文本和图形共同标识 C→Q 或 D→Q
+- 切换到 DFF 时移除 D→Q 配置；切回 Latch 时创建默认 D→Q 范围
+- 缺失来源或循环依赖在属性面板原位显示可恢复错误，不导致画布崩溃
+- 派生 Data 保留 Signal Timing 区块；Delay 和 Setup/Hold 的边沿列表来自最终解析后的 Q events
+- Derived Data 作为 Delay/Constraint 来源或目标时，画布、属性面板和 SVG 使用同一组最终边沿

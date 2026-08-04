@@ -53,9 +53,40 @@ export interface DataSignal extends SignalBase {
   periodPs: number;
   pattern: string[];
   patternSegments?: DataPatternSegment[];
+  sourceType?: "pattern" | "sequential";
+  derivation?: SequentialDerivation;
 }
 
 export type Signal = ClockSignal | DataSignal;
+
+export interface DelayRange {
+  minPs: number;
+  currentPs: number;
+  maxPs: number;
+}
+
+export type SequentialDevice = "dff" | "latch";
+export type SequentialTrigger = "rising" | "falling" | "high" | "low";
+
+export interface SequentialDerivation {
+  device: SequentialDevice;
+  clockSignalId: string;
+  dataSignalId: string;
+  trigger: SequentialTrigger;
+  c2q: DelayRange;
+  d2q?: DelayRange;
+  initialValue: string;
+}
+
+export function isSequentialDataSignal(
+  signal: Signal | undefined,
+): signal is DataSignal & { derivation: SequentialDerivation } {
+  return Boolean(
+    signal?.kind === "data" &&
+      signal.sourceType === "sequential" &&
+      signal.derivation,
+  );
+}
 
 export interface EdgeDelayLink {
   id?: string;
@@ -108,7 +139,7 @@ export interface TimingConstraintDraft {
 }
 
 export interface TimingProject {
-  version: 2;
+  version: 2 | 3;
   name: string;
   durationPs: number;
   signals: Signal[];
@@ -550,6 +581,7 @@ export function resolveTimingConstraint(
   durationPs: number,
   constraint: TimingConstraint,
   signalShiftsPs: Record<string, number> = {},
+  edgeTimes?: (signal: Signal, polarity: EdgePolarity) => number[],
 ): ResolvedTimingConstraint | undefined {
   const source = signals.find(
     (signal) => signal.id === constraint.sourceSignalId,
@@ -571,7 +603,9 @@ export function resolveTimingConstraint(
     selectedEdges: number[] | undefined,
     legacyEdge: number,
   ) => {
-    const times = signalEdgesByPolarity(signal, durationPs, polarity);
+    const times = edgeTimes
+      ? edgeTimes(signal, polarity)
+      : signalEdgesByPolarity(signal, durationPs, polarity);
     const indices =
       selectedEdges === undefined ? [legacyEdge] : selectedEdges;
     const selectedTimes =
@@ -580,7 +614,7 @@ export function resolveTimingConstraint(
         : indices
             .map((edge) => times[Math.max(1, Math.floor(edge)) - 1])
             .filter((time): time is number => time !== undefined);
-    const shiftPs = signalShiftsPs[signal.id] ?? 0;
+    const shiftPs = edgeTimes ? 0 : (signalShiftsPs[signal.id] ?? 0);
     return selectedTimes.map((time) => time + shiftPs);
   };
 

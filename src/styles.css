@@ -915,8 +915,43 @@ button,
 
 .linked-timing-window,
 .linked-delay-range,
-.linked-delay-link {
+.linked-delay-link,
+.sequential-guides {
   pointer-events: none;
+}
+
+.latch-transparent-window {
+  fill: color-mix(in srgb, var(--violet) 5%, transparent);
+  stroke: color-mix(in srgb, var(--violet) 14%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 2 5;
+  vector-effect: non-scaling-stroke;
+}
+
+.sequential-delay-range rect {
+  fill: color-mix(in srgb, var(--teal) 7%, transparent);
+}
+
+.sequential-delay-range.is-c2q rect {
+  fill: color-mix(in srgb, var(--violet) 8%, transparent);
+}
+
+.sequential-delay-range line {
+  stroke: var(--text-faint);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+  opacity: 0.38;
+  vector-effect: non-scaling-stroke;
+}
+
+.sequential-delay-range text {
+  fill: var(--text-faint);
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 7px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: var(--canvas);
+  stroke-width: 2px;
 }
 
 .linked-timing-window rect {
@@ -1188,6 +1223,75 @@ button,
 
 .linked-timing-section {
   border-bottom: 0;
+}
+
+.sequential-signal-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.sequential-field {
+  display: grid;
+  gap: 5px;
+}
+
+.sequential-field > span {
+  color: var(--text-faint);
+  font-size: 8px;
+  font-weight: 500;
+}
+
+.delay-range-editor {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 3px 0 0;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel-subtle);
+}
+
+.delay-range-editor legend {
+  padding: 0 5px;
+  color: var(--text-soft);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.delay-range-inputs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.sequential-signal-editor .mantine-InputWrapper-label,
+.delay-range-editor .mantine-InputWrapper-label {
+  color: var(--text-faint);
+  font-size: 8px;
+}
+
+.sequential-signal-editor .mantine-Input-input,
+.delay-range-editor .mantine-Input-input {
+  min-height: 30px;
+  height: 30px;
+  font-size: 9px;
+}
+
+.sequential-helper {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.sequential-error {
+  padding: 7px 8px;
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  color: var(--danger);
+  font-size: 9px;
 }
 
 .linked-timing-empty p {

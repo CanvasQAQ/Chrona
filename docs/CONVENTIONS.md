@@ -28,6 +28,9 @@
 - `src/components`：可复用的业务组件。
 - `src/App.tsx`：当前 V1 垂直切片的状态编排；功能扩展后再拆分为 feature 模块。
 - Timing Engine 不得依赖 React 或 Mantine，并必须具备自动化测试。
+- Sequential 仿真逻辑放在独立领域模块中；工程只保存衍生配方，解析后的 Q events 作为运行时数据。
+- Sequential Derived Data 必须通过 Signal ID 引用 Clock/Data，并在解析时检测循环依赖。
+- Delay Link、Sequential Derivation 与 Timing Constraint 必须消费统一解析后的 Signal 边沿；不得再从衍生 Signal 的占位 Pattern 推导边沿。
 - 新工程分别使用 `delayLinks[]` 和 `timingConstraints[]` 保存关系；`linkedTiming` 仅作为历史工程的读取迁移入口。
 - Delay 的计算结果是目标 Signal 的派生 Start offset，不得覆盖 Signal 保存的基础 Start。
 - `canvasSettings` 保存轨道高度与纵向网格设置；缺省值必须由领域层统一补齐。

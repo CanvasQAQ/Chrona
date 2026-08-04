@@ -29,6 +29,7 @@ import {
   FolderOpen,
   GripVertical,
   Grid2X2,
+  GitBranch,
   Layers3,
   Minus,
   Moon,
@@ -58,13 +59,14 @@ import { ConvertibleTimeInput } from "./components/ConvertibleTimeInput";
 import { DataPatternEditor } from "./components/DataPatternEditor";
 import { RateInput } from "./components/RateInput";
 import { SignalTimingEditor } from "./components/SignalTimingEditor";
+import { SequentialSignalEditor } from "./components/SequentialSignalEditor";
 import chronaIcon from "./assets/chrona.png";
 import {
   buildPeriodGrid,
   clockWavePoints,
   colorForDataToken,
   patternForDataSignal,
-  resolveDelayLinks,
+  isSequentialDataSignal,
   resolveTimingConstraint,
   type EdgeDelayLink,
   type ClockSignal,
@@ -76,6 +78,11 @@ import {
   type TimingConstraint,
   type WavePoint,
 } from "./domain/timing";
+import {
+  latchTransparentIntervals,
+  resolveProjectTiming,
+  segmentsForResolvedWaveform,
+} from "./domain/sequential";
 
 const MIN_TRACK_HEIGHT = 48;
 const MAX_TRACK_HEIGHT = 160;
@@ -94,7 +101,7 @@ const DEFAULT_CANVAS_SETTINGS = {
 };
 
 const initialProject: TimingProject = {
-  version: 2,
+  version: 3,
   name: "Untitled",
   durationPs: 6000,
   constraintDraft: {
@@ -424,7 +431,7 @@ function buildStandaloneSvg(
 function isTimingProject(value: unknown): value is TimingProject {
   if (!value || typeof value !== "object") return false;
   const project = value as Partial<TimingProject>;
-  return project.version === 2 && Array.isArray(project.signals);
+  return (project.version === 2 || project.version === 3) && Array.isArray(project.signals);
 }
 
 function App() {
@@ -509,6 +516,16 @@ function App() {
         (constraint) => constraint.targetSignalId === selected.id,
       )
     : undefined;
+  const resolvedProjectTiming = useMemo(
+    () =>
+      resolveProjectTiming(
+        project.signals,
+        project.durationPs,
+        project.delayLinks ?? [],
+      ),
+    [project.delayLinks, project.durationPs, project.signals],
+  );
+  const resolvedSequentialSignals = resolvedProjectTiming;
   const referencePeriodPs = referenceClock?.periodPs ?? 1000;
   const canvasSettings = project.canvasSettings ?? DEFAULT_CANVAS_SETTINGS;
   const trackHeight = Math.min(
@@ -528,15 +545,10 @@ function App() {
     () => new Map(trackLayouts.map((layout) => [layout.signal.id, layout])),
     [trackLayouts],
   );
-  const resolvedDelayLinks = useMemo(
-    () =>
-      resolveDelayLinks(
-        project.signals,
-        project.durationPs,
-        project.delayLinks ?? [],
-      ),
-    [project.delayLinks, project.durationPs, project.signals],
-  );
+  const resolvedDelayLinks = {
+    byId: resolvedProjectTiming.delayById,
+    signalShiftsPs: resolvedProjectTiming.signalShiftsPs,
+  };
   const resolvedConstraints = useMemo(
     () =>
       (project.timingConstraints ?? []).map((constraint) => ({
@@ -546,6 +558,8 @@ function App() {
           project.durationPs,
           constraint,
           resolvedDelayLinks.signalShiftsPs,
+          (signal, polarity) =>
+            resolvedProjectTiming.edgeTimes(signal.id, polarity),
         ),
       })),
     [
@@ -553,6 +567,7 @@ function App() {
       project.signals,
       project.timingConstraints,
       resolvedDelayLinks.signalShiftsPs,
+      resolvedProjectTiming,
     ],
   );
   const canvasHeight = Math.max(
@@ -560,7 +575,14 @@ function App() {
       trackLayouts.reduce((total, track) => total + track.height, 0),
     430,
   );
-  const gridPeriodPs = selected?.periodPs ?? referencePeriodPs;
+  const selectedDerivedClock = isSequentialDataSignal(selected)
+    ? project.signals.find(
+        (signal): signal is ClockSignal =>
+          signal.kind === "clock" &&
+          signal.id === selected.derivation.clockSignalId,
+      )
+    : undefined;
+  const gridPeriodPs = selectedDerivedClock?.periodPs ?? selected?.periodPs ?? referencePeriodPs;
   const gridIntervalPs =
     canvasSettings.gridMode === "custom"
       ? Math.max(1, canvasSettings.gridIntervalPs)
@@ -1004,6 +1026,57 @@ function App() {
     setStatusMessage(`${signal.name} added`);
   };
 
+  const addDerivedSignal = () => {
+    const clock = project.signals.find(
+      (signal): signal is ClockSignal => signal.kind === "clock",
+    );
+    const preferredData =
+      selected?.kind === "data" ? selected : undefined;
+    const data =
+      preferredData ??
+      project.signals.find(
+        (signal): signal is DataSignal => signal.kind === "data",
+      );
+    if (!clock || !data) {
+      setStatusMessage("Add at least one Clock and one Data signal first");
+      return;
+    }
+    const id = `data-${crypto.randomUUID()}`;
+    let outputIndex = 0;
+    let name = "Q";
+    while (project.signals.some((signal) => signal.name === name)) {
+      outputIndex += 1;
+      name = `Q${outputIndex}`;
+    }
+    const signal: DataSignal = {
+      id,
+      kind: "data",
+      sourceType: "sequential",
+      name,
+      startPs: 0,
+      periodPs: clock.periodPs,
+      pattern: ["X"],
+      visible: true,
+      color: SIGNAL_COLORS[project.signals.length % SIGNAL_COLORS.length],
+      derivation: {
+        device: "latch",
+        clockSignalId: clock.id,
+        dataSignalId: data.id,
+        trigger: "high",
+        c2q: { minPs: 0, currentPs: 10, maxPs: 20 },
+        d2q: { minPs: 0, currentPs: 20, maxPs: 40 },
+        initialValue: "X",
+      },
+    };
+    setProject((current) => ({
+      ...current,
+      version: 3,
+      signals: [...current.signals, signal],
+    }));
+    setSelectedId(id);
+    setStatusMessage(`${name} derived from ${clock.name} and ${data.name}`);
+  };
+
   const addSelectedDelay = (sourceSignalId: string) => {
     if (!selected) return;
     setProject((current) => {
@@ -1270,7 +1343,16 @@ function App() {
         }
         const normalizedProject: TimingProject = {
           ...loaded,
+          version: 3,
           durationPs: Math.max(1, loaded.durationPs || initialProject.durationPs),
+          signals: loaded.signals.map((signal) =>
+            signal.kind === "data"
+              ? {
+                  ...signal,
+                  sourceType: signal.sourceType ?? "pattern",
+                }
+              : signal,
+          ),
           signalGroups: loaded.signalGroups ?? [],
           delayLinks: (
             loaded.delayLinks ??
@@ -1449,6 +1531,70 @@ function App() {
     return shiftPs === 0
       ? signal
       : { ...signal, startPs: signal.startPs + shiftPs };
+  };
+
+  const renderSequentialGuides = () => {
+    if (!isSequentialDataSignal(selected)) return null;
+    const layout = trackLayoutBySignal.get(selected.id);
+    const waveform = resolvedSequentialSignals.bySignalId[selected.id];
+    const sourceClock = project.signals.find(
+      (signal): signal is ClockSignal =>
+        signal.kind === "clock" &&
+        signal.id === selected.derivation.clockSignalId,
+    );
+    const clock = sourceClock
+      ? (resolvedProjectTiming.clockBySignalId[sourceClock.id] ?? sourceClock)
+      : undefined;
+    if (!layout || !waveform || !clock) return null;
+    const intervals =
+      selected.derivation.device === "latch"
+        ? latchTransparentIntervals(
+            clock,
+            selected.derivation.trigger === "low" ? "low" : "high",
+            project.durationPs,
+          )
+        : [];
+    return (
+      <g className="sequential-guides" aria-label="Derived signal delay ranges">
+        {intervals.map((interval, index) => {
+          const x1 = timelineX(interval.startPs);
+          const x2 = timelineX(interval.endPs);
+          return (
+            <rect
+              key={`transparent-${index}`}
+              className="latch-transparent-window"
+              x={x1}
+              y={layout.y + 3}
+              width={Math.max(0, x2 - x1)}
+              height={Math.max(1, layout.height - 6)}
+              rx="3"
+            />
+          );
+        })}
+        {waveform.events.map((event, index) => {
+          const minX = timelineX(event.minTimePs);
+          const maxX = timelineX(event.maxTimePs);
+          const currentX = timelineX(event.timePs);
+          const top = layout.y + 5;
+          const bottom = layout.y + layout.height - 5;
+          return (
+            <g key={`${event.timePs}-${index}`} className={`sequential-delay-range is-${event.cause}`}>
+              <title>{`${event.cause.toUpperCase()} · ${formatAxisTime(event.timePs - event.causeTimePs)} · ${formatAxisTime(event.minTimePs - event.causeTimePs)}–${formatAxisTime(event.maxTimePs - event.causeTimePs)}`}</title>
+              <rect
+                x={Math.min(minX, maxX)}
+                y={top}
+                width={Math.max(1, Math.abs(maxX - minX))}
+                height={Math.max(1, bottom - top)}
+                rx="3"
+              />
+              <line x1={minX} x2={minX} y1={top} y2={bottom} />
+              <line x1={maxX} x2={maxX} y1={top} y2={bottom} />
+              <text x={currentX + 3} y={top + 8}>{event.cause === "c2q" ? "C→Q" : "D→Q"}</text>
+            </g>
+          );
+        })}
+      </g>
+    );
   };
 
   const renderDelayBackgrounds = () => {
@@ -1878,6 +2024,17 @@ function App() {
                   >
                     Data
                   </Menu.Item>
+                  <Menu.Divider />
+                  <Menu.Item
+                    leftSection={<GitBranch size={16} />}
+                    disabled={
+                      !project.signals.some((signal) => signal.kind === "clock") ||
+                      !project.signals.some((signal) => signal.kind === "data")
+                    }
+                    onClick={addDerivedSignal}
+                  >
+                    Derived data
+                  </Menu.Item>
                 </Menu.Dropdown>
               </Menu>
 
@@ -2241,6 +2398,7 @@ function App() {
 
                 {renderConstraintWindows()}
                 {renderDelayBackgrounds()}
+                {renderSequentialGuides()}
 
                 {trackLayouts.map(({ height, signal, y }) => {
                   const renderedSignal = signalWithLinkedStart(signal);
@@ -2324,10 +2482,17 @@ function App() {
                       ) : (
                         <g className="data-symbols">
                           {(() => {
-                            const segments = buildDataSegments(
-                              renderedSignal,
-                              project.durationPs,
-                            );
+                            const resolvedWaveform =
+                              resolvedSequentialSignals.bySignalId[renderedSignal.id];
+                            const segments = isSequentialDataSignal(renderedSignal) && resolvedWaveform
+                              ? segmentsForResolvedWaveform(
+                                  resolvedWaveform,
+                                  project.durationPs,
+                                )
+                              : buildDataSegments(
+                                  renderedSignal,
+                                  project.durationPs,
+                                );
                             return segments.map((segment, segmentIndex) => {
                               const x1 = timelineX(segment.startPs);
                               const x2 = timelineX(segment.endPs);
@@ -2520,7 +2685,9 @@ function App() {
                 variant="light"
                 color={selected.kind === "clock" ? "violet" : "teal"}
               >
-                {selected.kind}
+                {isSequentialDataSignal(selected)
+                  ? selected.derivation.device
+                  : selected.kind}
               </Badge>
             )}
           </div>
@@ -2537,15 +2704,18 @@ function App() {
                   value={selected.name}
                   onChange={(event) => updateSelected({ name: event.target.value })}
                 />
-                <ConvertibleTimeInput
-                  label="Start"
-                  description={`Relative to ${referenceClock?.name ?? "reference clock"}`}
-                  valuePs={selected.startPs}
-                  referencePeriodPs={referencePeriodPs}
-                  onChange={(startPs) => updateSelected({ startPs })}
-                />
+                {!isSequentialDataSignal(selected) && (
+                  <ConvertibleTimeInput
+                    label="Start"
+                    description={`Relative to ${referenceClock?.name ?? "reference clock"}`}
+                    valuePs={selected.startPs}
+                    referencePeriodPs={referencePeriodPs}
+                    onChange={(startPs) => updateSelected({ startPs })}
+                  />
+                )}
               </section>
 
+              {!isSequentialDataSignal(selected) && (
               <section className="property-section">
                 <div className="section-title">
                   <span>Timing</span>
@@ -2584,8 +2754,9 @@ function App() {
                   </>
                 )}
               </section>
+              )}
 
-              {selected.kind === "data" && (
+              {selected.kind === "data" && !isSequentialDataSignal(selected) && (
                 <section className="property-section pattern-section">
                   <div className="section-title">
                     <span>Pattern builder</span>
@@ -2603,6 +2774,23 @@ function App() {
                 </section>
               )}
 
+              {isSequentialDataSignal(selected) && (
+                <section className="property-section sequential-section">
+                  <div className="section-title">
+                    <span>Sequential logic</span>
+                    <span className="section-index">02</span>
+                  </div>
+                  <SequentialSignalEditor
+                    selected={selected}
+                    signals={project.signals}
+                    error={resolvedSequentialSignals.errors[selected.id]}
+                    onChange={(derivation) =>
+                      updateSelected({ derivation } as Partial<Signal>)
+                    }
+                  />
+                </section>
+              )}
+
               <section className="property-section linked-timing-section">
                 <div className="section-title">
                   <span>Signal timing</span>
@@ -2612,6 +2800,9 @@ function App() {
                   durationPs={project.durationPs}
                   signals={project.signals}
                   selected={selected}
+                  edgeTimes={(signal, polarity) =>
+                    resolvedProjectTiming.edgeTimes(signal.id, polarity)
+                  }
                   delayLink={selectedDelayLink}
                   constraint={selectedConstraint}
                   onAddDelay={addSelectedDelay}

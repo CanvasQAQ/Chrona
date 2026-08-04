@@ -22,6 +22,7 @@ interface SignalTimingEditorProps {
   durationPs: number;
   selected: Signal;
   signals: Signal[];
+  edgeTimes?: (signal: Signal, polarity: EdgePolarity) => number[];
   onAddConstraint: (sourceSignalId: string) => void;
   onAddDelay: (sourceSignalId: string) => void;
   onChangeConstraint: (patch: Partial<TimingConstraint>) => void;
@@ -35,8 +36,19 @@ function numericValue(value: string | number, fallback: number): number {
   return Number.isFinite(numeric) ? numeric : fallback;
 }
 
-function edgeCount(signal: Signal | undefined, durationPs: number): number {
-  return signal ? Math.max(1, signalEdges(signal, durationPs).length) : 1;
+function edgeCount(
+  signal: Signal | undefined,
+  durationPs: number,
+  edgeTimes?: (signal: Signal, polarity: EdgePolarity) => number[],
+): number {
+  return signal
+    ? Math.max(
+        1,
+        edgeTimes
+          ? edgeTimes(signal, signal.kind === "clock" ? "both" : "transition").length
+          : signalEdges(signal, durationPs).length,
+      )
+    : 1;
 }
 
 function defaultPolarity(signal?: Signal): EdgePolarity {
@@ -61,9 +73,13 @@ function edgeOptions(
   signal: Signal | undefined,
   durationPs: number,
   polarity: EdgePolarity,
+  edgeTimes?: (signal: Signal, polarity: EdgePolarity) => number[],
 ) {
   if (!signal) return [];
-  return signalEdgesByPolarity(signal, durationPs, polarity).map(
+  return (edgeTimes
+    ? edgeTimes(signal, polarity)
+    : signalEdgesByPolarity(signal, durationPs, polarity)
+  ).map(
     (timePs, index) => ({
       value: String(index + 1),
       label: `#${index + 1} · ${Math.round(timePs)} ps`,
@@ -77,6 +93,7 @@ export function SignalTimingEditor({
   durationPs,
   selected,
   signals,
+  edgeTimes,
   onAddConstraint,
   onAddDelay,
   onChangeConstraint,
@@ -119,8 +136,8 @@ export function SignalTimingEditor({
     const minimum = Math.max(0, Math.min(delayLink.minPs, delayLink.maxPs));
     const maximum = Math.max(minimum + 1, Math.max(delayLink.minPs, delayLink.maxPs));
     const current = Math.min(maximum, Math.max(minimum, delayLink.currentPs));
-    const sourceEdgeCount = edgeCount(delaySource, durationPs);
-    const targetEdgeCount = edgeCount(selected, durationPs);
+    const sourceEdgeCount = edgeCount(delaySource, durationPs, edgeTimes);
+    const targetEdgeCount = edgeCount(selected, durationPs, edgeTimes);
 
     return (
       <div className="signal-timing-form">
@@ -304,6 +321,7 @@ export function SignalTimingEditor({
               constraintSource,
               durationPs,
               sourceEdgeKind,
+              edgeTimes,
             )}
             value={sourceValues}
             placeholder="All visible edges"
@@ -334,7 +352,7 @@ export function SignalTimingEditor({
             />
             <MultiSelect
               aria-label="Constrained edge numbers"
-              data={edgeOptions(selected, durationPs, targetEdgeKind)}
+              data={edgeOptions(selected, durationPs, targetEdgeKind, edgeTimes)}
               value={targetValues}
               placeholder="All visible edges"
               clearable

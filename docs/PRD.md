@@ -8,6 +8,8 @@
 > 2026-07-28 修订：输入、Data Pattern、Signal Track Header、Canvas 与动画定义已更新。冲突内容以 [V1 交互修订说明](INTERACTION_SPEC.md) 为准。
 >
 > 2026-08-01 修订：Timing 功能调整为附着于单个 Signal 的 Delay 与 Setup/Hold 约束，补充多边沿选择、派生 Start、图示标签和 Canvas Settings。
+>
+> 2026-08-04 修订：增加 Sequential Derived Data；DFF 按 Clock 边沿采样，Latch 按 Clock 高/低电平透明，并分别计算 C→Q 与 D→Q 延迟范围。
 
 ## 1. 产品概述
 
@@ -228,6 +230,20 @@ UI 时间输入支持：
 ### 6.7 导出
 
 V1 支持将当前 Timing Diagram 导出为 SVG。
+
+### 6.8 Sequential Derived Data
+
+- 用户指定一个 Clock Signal 和一个 Data Signal，系统创建持续联动的派生 Data 输出 Q
+- DFF 支持 Rising/Falling 采样边沿，并使用 C→Q Min / Current / Max
+- Latch 支持 High/Low 透明电平；进入透明状态时使用 C→Q，透明期间的 Data transition 使用 D→Q
+- C→Q 与 D→Q 分别保存 Min / Current / Max，并可实时调节 Current
+- Q 的实际波形由 Current 计算；每个 Q transition 单独显示对应的 Min/Max 到达边界和 C→Q/D→Q 来源
+- Latch 透明区间定义为 `[open, close)`；透明期间已产生的传播事件可在 Clock 关闭后完成
+- 派生输出可以继续作为后一级 DFF/Latch 的 Data 输入；循环依赖必须被拒绝并在属性面板显示原因
+- 派生输出与普通 Signal 共用 Delay 和 Setup/Hold：可作为 Source、Target、Reference 或 Constrained Signal
+- Delay 与 Sequential Derivation 使用统一依赖图；延迟后的 Clock/Data/Q 必须按最终波形继续向下游传播
+- 工程只保存衍生配方，不保存可重新计算的 Q events
+- 第一版不自动模拟 setup/hold、亚稳态或随机抖动
 
 ## 7. UI 需求
 
