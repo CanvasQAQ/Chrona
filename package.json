@@ -1,6 +1,6 @@
 {
   "name": "chrona",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "An interactive timing diagram editor for hardware engineers.",
   "author": {
     "name": "CanvasQAQ",
