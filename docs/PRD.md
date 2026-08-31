@@ -208,6 +208,7 @@ UI 时间输入支持：
 - 每条关系的 Min / Current / Max Delay
 - 新建 Delay 默认 Min 0 ps、Current 10 ps、Max 20 ps
 - 每个目标 Signal 只允许一个 Delay Source，避免多个来源同时驱动整条目标波形而产生冲突
+- 画布底部提供可折叠 Delay Console，以控制带集中编辑全部 Delay；Min/Max 数值框分列 Current 滑杆两侧，Current 控制实际波形位置
 - 每条 Delay 带可编辑的 Diagram Label，新建时自动按 `t1`、`t2` 等顺序命名
 - Current Delay 通过所选边沿锚点计算目标 Signal 的派生 Start offset，并平移整条目标波形
 - Target 可继续作为另一条关系的 Source，使多个 Signal Delay 按依赖传播

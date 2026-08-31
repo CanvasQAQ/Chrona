@@ -1,4 +1,5 @@
 @import "./styles/shell.css";
 @import "./styles/canvas.css";
 @import "./styles/inspector.css";
+@import "./styles/delay-console.css";
 @import "./styles/responsive.css";

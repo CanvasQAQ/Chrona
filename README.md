@@ -9,6 +9,7 @@ Chrona 是一款面向硬件设计、验证和系统工程师的可交互 Timing
 - 创建并编辑 Clock / Data 波形，使用统一的 `ps` 时间模型
 - 从指定 Clock 与 Data 实时派生 DFF / Latch 输出；支持采样边沿或透明电平，以及 C→Q / D→Q 的 Min / Current / Max 延迟
 - 为任意目标 Signal 配置来自任意 Source Signal 的 Delay，并通过锚点边沿联动整条目标波形
+- 通过底部 Delay Console 集中浏览和调节全部 Signal Delay；Min/Max 数值框界定范围，Current 控制条实时驱动波形
 - 使用 Min / Current / Max 表达 Delay 范围，并为图中测量线设置 `t1`、`t2` 等自定义名称
 - 为任意 Signal 添加多边沿 Setup/Hold 约束；目标边沿进入窗口时，以低干扰的半透明红色区域反馈
 - 调整轨道高度、纵向网格和网格间隔，并随工程保存

@@ -29,6 +29,7 @@ import {
   ScanLine,
   Search,
   Settings2,
+  SlidersHorizontal,
   Trash2,
   X,
 } from "lucide-react";
@@ -45,6 +46,7 @@ import {
   useState,
 } from "react";
 import { PropertyPanel } from "./features/inspector/PropertyPanel";
+import { DelayConsole } from "./features/delay-console/DelayConsole";
 import {
   AXIS_HEIGHT,
   CANVAS_BASE_WIDTH,
@@ -153,6 +155,8 @@ function App() {
   const [exportStartPs, setExportStartPs] = useState(0);
   const [exportEndPs, setExportEndPs] = useState(initialProject.durationPs);
   const [statusMessage, setStatusMessage] = useState("Timing engine ready");
+  const [delayConsoleOpen, setDelayConsoleOpen] = useState(false);
+  const [delayConsoleCollapsed, setDelayConsoleCollapsed] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const canvasViewportRef = useRef<HTMLDivElement>(null);
@@ -766,11 +770,15 @@ function App() {
     setStatusMessage(`${name} derived from ${clock.name} and ${data.name}`);
   };
 
-  const addSelectedDelay = (sourceSignalId: string) => {
-    if (!selected) return;
+  const addDelayForTarget = (
+    targetSignalId: string,
+    sourceSignalId: string,
+  ) => {
+    const target = project.signals.find((signal) => signal.id === targetSignalId);
+    if (!target || targetSignalId === sourceSignalId) return;
     setProject((current) => {
       const existing = (current.delayLinks ?? []).filter(
-        (link) => link.targetSignalId !== selected.id,
+        (link) => link.targetSignalId !== targetSignalId,
       );
       const usedLabels = new Set(
         existing.map((link) => link.label?.trim()).filter(Boolean),
@@ -785,7 +793,7 @@ function App() {
             id: crypto.randomUUID(),
             label: `t${labelIndex}`,
             sourceSignalId,
-            targetSignalId: selected.id,
+            targetSignalId,
             sourceEdge: 1,
             targetEdge: 1,
             minPs: 0,
@@ -795,18 +803,42 @@ function App() {
         ],
       };
     });
-    setStatusMessage(`${selected.name} source delay added`);
+    setSelectedId(targetSignalId);
+    setStatusMessage(`${target.name} source delay added`);
+  };
+
+  const addSelectedDelay = (sourceSignalId: string) => {
+    if (selected) addDelayForTarget(selected.id, sourceSignalId);
+  };
+
+  const updateDelayForTarget = (
+    targetSignalId: string,
+    patch: Partial<EdgeDelayLink>,
+  ) => {
+    const target = project.signals.find((signal) => signal.id === targetSignalId);
+    setProject((current) => ({
+      ...current,
+      delayLinks: (current.delayLinks ?? []).map((link) =>
+        link.targetSignalId === targetSignalId ? { ...link, ...patch } : link,
+      ),
+    }));
+    setStatusMessage(`${target?.name ?? "Signal"} delay updated`);
+  };
+
+  const removeDelayForTarget = (targetSignalId: string) => {
+    const target = project.signals.find((signal) => signal.id === targetSignalId);
+    setProject((current) => ({
+      ...current,
+      delayLinks: (current.delayLinks ?? []).filter(
+        (link) => link.targetSignalId !== targetSignalId,
+      ),
+    }));
+    setStatusMessage(`${target?.name ?? "Signal"} delay removed`);
   };
 
   const updateSelectedDelay = (patch: Partial<EdgeDelayLink>) => {
     if (!selectedDelayLink) return;
-    setProject((current) => ({
-      ...current,
-      delayLinks: (current.delayLinks ?? []).map((link) =>
-        link.id === selectedDelayLink.id ? { ...link, ...patch } : link,
-      ),
-    }));
-    setStatusMessage(`${selected?.name ?? "Signal"} delay updated`);
+    updateDelayForTarget(selectedDelayLink.targetSignalId, patch);
   };
 
   const addSelectedConstraint = (sourceSignalId: string) => {
@@ -1379,7 +1411,16 @@ function App() {
       />
 
       <div className="workspace">
-        <main className="editor">
+        <main
+          className="editor"
+          data-delay-console={
+            delayConsoleOpen
+              ? delayConsoleCollapsed
+                ? "collapsed"
+                : "open"
+              : "closed"
+          }
+        >
           <div className="editor-toolbar">
             <div className="canvas-mode">
               <Grid2X2 size={16} />
@@ -1512,6 +1553,23 @@ function App() {
                   </div>
                 </Popover.Dropdown>
               </Popover>
+
+              <Button
+                variant={delayConsoleOpen ? "light" : "subtle"}
+                color={delayConsoleOpen ? "violet" : "gray"}
+                size="compact-sm"
+                leftSection={<SlidersHorizontal size={15} />}
+                aria-expanded={delayConsoleOpen}
+                aria-controls="delay-console"
+                onClick={() => {
+                  setDelayConsoleOpen((opened) => !opened);
+                  setDelayConsoleCollapsed(false);
+                }}
+              >
+                Delays
+                {(project.delayLinks?.length ?? 0) > 0 &&
+                  ` · ${project.delayLinks?.length ?? 0}`}
+              </Button>
 
               <Menu shadow="md" width={180} position="bottom-end">
                 <Menu.Target>
@@ -2175,6 +2233,26 @@ function App() {
             </div>
           </div>
 
+          {delayConsoleOpen && (
+            <DelayConsole
+              collapsed={delayConsoleCollapsed}
+              delayLinks={project.delayLinks ?? []}
+              edgeTimes={(signal, polarity) =>
+                resolvedProjectTiming.edgeTimes(signal.id, polarity)
+              }
+              onAddDelay={addDelayForTarget}
+              onClose={() => setDelayConsoleOpen(false)}
+              onRemoveDelay={removeDelayForTarget}
+              onSelectSignal={setSelectedId}
+              onToggleCollapsed={() =>
+                setDelayConsoleCollapsed((collapsed) => !collapsed)
+              }
+              onUpdateDelay={updateDelayForTarget}
+              selectedSignalId={selected?.id ?? ""}
+              signals={project.signals}
+            />
+          )}
+
           <div className="statusbar">
             <div className="status-item" aria-live="polite">
               <span className="status-dot" />
@@ -2205,16 +2283,7 @@ function App() {
           onUpdateSelected={updateSelected}
           onAddDelay={addSelectedDelay}
           onChangeDelay={updateSelectedDelay}
-          onRemoveDelay={() => {
-            if (!selected) return;
-            setProject((current) => ({
-              ...current,
-              delayLinks: (current.delayLinks ?? []).filter(
-                (link) => link.targetSignalId !== selected.id,
-              ),
-            }));
-            setStatusMessage(`${selected.name} delay removed`);
-          }}
+          onRemoveDelay={() => selected && removeDelayForTarget(selected.id)}
           onAddConstraint={addSelectedConstraint}
           onChangeConstraint={updateSelectedConstraint}
           onRemoveConstraint={() => {

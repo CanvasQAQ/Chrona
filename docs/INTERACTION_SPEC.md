@@ -161,6 +161,8 @@ Delay 配置附着在目标 Signal，而不是项目级 Clock/Data 配对。工�
 
 每个目标 Signal 只允许一个 Delay Source。波形边沿由 Signal 参数、Delay 与 Sequential Derivation 统一计算，不提供单边沿拖动或吸附，避免局部编辑与整条波形的时序语义冲突。
 
+画布底部提供可折叠的 Delay Console，用于集中管理全部 `delayLinks[]`。每条 Delay 使用一条紧凑控制带：关系与锚点使用选择器，Min/Max 作为 Current 控制条左右两侧的数值边界，Current 使用单一滑杆调整。右侧 Inspector 继续提供单 Signal 的精确数值编辑；两处必须读写同一份工程状态并实时更新波形。
+
 ### 7.2 Min/Max 表达
 
 Min/Max 只在目标 Signal 轨道显示为低对比度虚线边界：
