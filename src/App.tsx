@@ -1,19 +1,15 @@
 import {
   ActionIcon,
-  Badge,
   Button,
   Menu,
   NumberInput,
   Popover,
   Select,
   SegmentedControl,
-  Slider,
   Switch,
   TextInput,
   Tooltip,
   UnstyledButton,
-  useComputedColorScheme,
-  useMantineColorScheme,
 } from "@mantine/core";
 import {
   Check,
@@ -22,24 +18,17 @@ import {
   CirclePlus,
   Clock3,
   Copy,
-  Download,
   Eye,
   EyeOff,
   FolderPlus,
-  FolderOpen,
   GripVertical,
   Grid2X2,
   GitBranch,
   Layers3,
-  Minus,
-  Moon,
   RotateCcw,
-  Save,
   ScanLine,
   Search,
   Settings2,
-  Square,
-  Sun,
   Trash2,
   X,
 } from "lucide-react";
@@ -55,28 +44,44 @@ import {
   useRef,
   useState,
 } from "react";
-import { ConvertibleTimeInput } from "./components/ConvertibleTimeInput";
-import { DataPatternEditor } from "./components/DataPatternEditor";
-import { RateInput } from "./components/RateInput";
-import { SignalTimingEditor } from "./components/SignalTimingEditor";
-import { SequentialSignalEditor } from "./components/SequentialSignalEditor";
-import chronaIcon from "./assets/chrona.png";
+import { PropertyPanel } from "./features/inspector/PropertyPanel";
+import {
+  AXIS_HEIGHT,
+  CANVAS_BASE_WIDTH,
+  CANVAS_GUTTER,
+  DEFAULT_LABEL_WIDTH,
+  MAX_LABEL_WIDTH,
+  MAX_TRACK_HEIGHT,
+  MIN_LABEL_WIDTH,
+  MIN_TRACK_HEIGHT,
+  autoLabelWidth,
+  buildDataSegments,
+  formatAxisTime,
+  pathForPoints,
+  type TrackLayout,
+} from "./features/canvas/canvasGeometry";
+import {
+  ProjectHeader,
+  type ExportMode,
+} from "./features/project/ProjectHeader";
+import { buildStandaloneSvg } from "./features/project/svgExport";
+import {
+  downloadTextFile,
+  parseTimingProject,
+} from "./features/project/projectSerialization";
 import {
   buildPeriodGrid,
   clockWavePoints,
   colorForDataToken,
-  patternForDataSignal,
   isSequentialDataSignal,
   resolveTimingConstraint,
   type EdgeDelayLink,
   type ClockSignal,
-  type DataPatternSegment,
   type DataSignal,
   type Signal,
   type SignalGroup,
   type TimingProject,
   type TimingConstraint,
-  type WavePoint,
 } from "./domain/timing";
 import {
   latchTransparentIntervals,
@@ -84,14 +89,6 @@ import {
   segmentsForResolvedWaveform,
 } from "./domain/sequential";
 
-const MIN_TRACK_HEIGHT = 48;
-const MAX_TRACK_HEIGHT = 160;
-const AXIS_HEIGHT = 42;
-const CANVAS_GUTTER = 18;
-const DEFAULT_LABEL_WIDTH = 196;
-const MIN_LABEL_WIDTH = 136;
-const MAX_LABEL_WIDTH = 420;
-const CANVAS_BASE_WIDTH = 1120;
 const SIGNAL_COLORS = ["#8b7cff", "#35d6b4", "#ffb45c", "#4db7ff", "#f277a8"];
 const DEFAULT_CANVAS_SETTINGS = {
   showVerticalGrid: true,
@@ -115,18 +112,6 @@ const initialProject: TimingProject = {
   signals: [],
 };
 
-interface DataSegment {
-  endPs: number;
-  startPs: number;
-  token: string;
-}
-
-interface TrackLayout {
-  height: number;
-  signal: Signal;
-  y: number;
-}
-
 interface CanvasPan {
   moved: boolean;
   pointerId: number;
@@ -142,297 +127,11 @@ interface AxisSelection {
   startX: number;
 }
 
-type ExportMode = "view" | "range" | "all";
-
 interface ExportRange {
   endPs: number;
   startPs: number;
 }
 
-function percentile(values: number[], percentile: number): number {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((left, right) => left - right);
-  const index = Math.min(
-    sorted.length - 1,
-    Math.max(0, Math.ceil(percentile * sorted.length) - 1),
-  );
-  return sorted[index];
-}
-
-function autoLabelWidth(signals: Signal[]): number {
-  if (signals.length === 0 || typeof document === "undefined") {
-    return DEFAULT_LABEL_WIDTH;
-  }
-  const context = document.createElement("canvas").getContext("2d");
-  if (!context) return DEFAULT_LABEL_WIDTH;
-  context.font = "700 11px Inter, system-ui, sans-serif";
-  const nameWidth = percentile(
-    signals.map((signal) => context.measureText(signal.name).width),
-    0.85,
-  );
-  return Math.round(
-    Math.min(MAX_LABEL_WIDTH, Math.max(MIN_LABEL_WIDTH, nameWidth + 58)),
-  );
-}
-
-function pathForPoints(
-  points: WavePoint[],
-  durationPs: number,
-  width: number,
-  y: number,
-  rowHeight: number,
-): string {
-  const amplitude = Math.max(18, rowHeight * 0.44);
-  const center = y + rowHeight / 2;
-  const high = center - amplitude / 2;
-  const low = center + amplitude / 2;
-  return points
-    .map((point, index) => {
-      const x =
-        CANVAS_GUTTER +
-        (point.timePs / durationPs) * (width - CANVAS_GUTTER * 2);
-      const py = point.value ? high : low;
-      return `${index === 0 ? "M" : "L"} ${x.toFixed(2)} ${py}`;
-    })
-    .join(" ");
-}
-
-function formatAxisTime(timePs: number): string {
-  if (Math.abs(timePs) < 1000) {
-    const digits = Math.abs(timePs) < 100 ? 2 : 1;
-    return `${Number(timePs.toFixed(digits))} ps`;
-  }
-  const timeNs = timePs / 1000;
-  const digits = Math.abs(timeNs) < 10 ? 3 : 2;
-  return `${Number(timeNs.toFixed(digits))} ns`;
-}
-
-function buildDataSegments(
-  signal: DataSignal,
-  durationPs: number,
-): DataSegment[] {
-  const pattern = patternForDataSignal(signal);
-  const segments: DataSegment[] = [];
-  const startIndex = Math.floor(-signal.startPs / signal.periodPs);
-  const firstIndex = Math.max(0, startIndex);
-  const count =
-    Math.ceil((durationPs - signal.startPs) / signal.periodPs) + 1;
-
-  for (let index = firstIndex; index < count; index += 1) {
-    const rawStart = signal.startPs + index * signal.periodPs;
-    const rawEnd = rawStart + signal.periodPs;
-    if (rawEnd <= 0 || rawStart >= durationPs) continue;
-    const startPs = Math.max(0, rawStart);
-    const endPs = Math.min(durationPs, rawEnd);
-    const token = pattern[index % pattern.length];
-    const previous = segments[segments.length - 1];
-    if (
-      previous?.token === token &&
-      Math.abs(previous.endPs - startPs) < 1e-6
-    ) {
-      previous.endPs = endPs;
-    } else {
-      segments.push({ startPs, endPs, token });
-    }
-  }
-
-  return segments;
-}
-
-function downloadFile(name: string, content: string, type: string) {
-  const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = name;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
-const EXPORTED_STYLE_PROPERTIES = [
-  "fill",
-  "stroke",
-  "stroke-width",
-  "stroke-linecap",
-  "stroke-linejoin",
-  "stroke-dasharray",
-  "opacity",
-  "font-family",
-  "font-size",
-  "font-weight",
-  "letter-spacing",
-  "paint-order",
-  "vector-effect",
-] as const;
-
-function inlineSvgStyles(
-  sourceSvg: SVGSVGElement,
-  clonedSvg: SVGSVGElement,
-) {
-  const sourceElements: Element[] = [
-    sourceSvg,
-    ...Array.from(sourceSvg.querySelectorAll("*")),
-  ];
-  const clonedElements: Element[] = [
-    clonedSvg,
-    ...Array.from(clonedSvg.querySelectorAll("*")),
-  ];
-
-  sourceElements.forEach((sourceElement, index) => {
-    const clonedElement = clonedElements[index];
-    if (!clonedElement) return;
-    const computed = getComputedStyle(sourceElement);
-    let styles = EXPORTED_STYLE_PROPERTIES.map(
-      (property) => `${property}:${computed.getPropertyValue(property)}`,
-    ).join(";");
-    const tokenColor = computed.getPropertyValue("--token-color").trim();
-    if (tokenColor) styles += `;--token-color:${tokenColor}`;
-    clonedElement.setAttribute("style", styles);
-  });
-}
-
-function buildStandaloneSvg(
-  sourceSvg: SVGSVGElement,
-  layouts: TrackLayout[],
-  sourceWidth: number,
-  height: number,
-  labelWidth: number,
-  range: ExportRange,
-  durationPs: number,
-  outputTimelineWidth: number,
-): string {
-  const safeDuration = Math.max(1, durationPs);
-  const startRatio = Math.max(0, Math.min(1, range.startPs / safeDuration));
-  const endRatio = Math.max(startRatio, Math.min(1, range.endPs / safeDuration));
-  const sourceTimelineWidth = Math.max(1, sourceWidth - CANVAS_GUTTER * 2);
-  const sourceStartX = CANVAS_GUTTER + startRatio * sourceTimelineWidth;
-  const sourceEndX = CANVAS_GUTTER + endRatio * sourceTimelineWidth;
-  const sourceRangeWidth = Math.max(1, sourceEndX - sourceStartX);
-  const exported = document.createElementNS(SVG_NAMESPACE, "svg");
-  exported.setAttribute("xmlns", SVG_NAMESPACE);
-  exported.setAttribute("width", String(labelWidth + outputTimelineWidth));
-  exported.setAttribute("height", String(height));
-  exported.setAttribute(
-    "viewBox",
-    `0 0 ${labelWidth + outputTimelineWidth} ${height}`,
-  );
-
-  const background = document.createElementNS(SVG_NAMESPACE, "rect");
-  background.setAttribute("width", "100%");
-  background.setAttribute("height", "100%");
-  background.setAttribute("fill", "#ffffff");
-  exported.appendChild(background);
-
-  const labelBackground = document.createElementNS(SVG_NAMESPACE, "rect");
-  labelBackground.setAttribute("width", String(labelWidth));
-  labelBackground.setAttribute("height", String(height));
-  labelBackground.setAttribute("fill", "#f8f8fb");
-  exported.appendChild(labelBackground);
-
-  const labelDivider = document.createElementNS(SVG_NAMESPACE, "line");
-  labelDivider.setAttribute("x1", String(labelWidth));
-  labelDivider.setAttribute("x2", String(labelWidth));
-  labelDivider.setAttribute("y1", "0");
-  labelDivider.setAttribute("y2", String(height));
-  labelDivider.setAttribute("stroke", "#dfe1e8");
-  exported.appendChild(labelDivider);
-
-  const axisLabel = document.createElementNS(SVG_NAMESPACE, "text");
-  axisLabel.setAttribute("x", "13");
-  axisLabel.setAttribute("y", "25");
-  axisLabel.setAttribute("fill", "#777a88");
-  axisLabel.setAttribute("font-size", "9");
-  axisLabel.setAttribute("font-family", "Inter, Arial, sans-serif");
-  axisLabel.setAttribute("font-weight", "700");
-  axisLabel.textContent = "SIGNAL";
-  exported.appendChild(axisLabel);
-
-  layouts.forEach(({ height: trackHeight, signal, y }) => {
-    const divider = document.createElementNS(SVG_NAMESPACE, "line");
-    divider.setAttribute("x1", "0");
-    divider.setAttribute("x2", String(labelWidth));
-    divider.setAttribute("y1", String(y + trackHeight - 1));
-    divider.setAttribute("y2", String(y + trackHeight - 1));
-    divider.setAttribute("stroke", "#e3e4eb");
-    exported.appendChild(divider);
-
-    const label = document.createElementNS(SVG_NAMESPACE, "text");
-    label.setAttribute("x", "13");
-    label.setAttribute("y", String(y + trackHeight / 2 + 4));
-    label.setAttribute("fill", "#20212b");
-    label.setAttribute("font-size", "11");
-    label.setAttribute("font-family", "Inter, Arial, sans-serif");
-    label.setAttribute("font-weight", "700");
-    label.textContent = signal.name;
-    exported.appendChild(label);
-  });
-
-  const clonedCanvas = sourceSvg.cloneNode(true) as SVGSVGElement;
-  inlineSvgStyles(sourceSvg, clonedCanvas);
-  clonedCanvas.setAttribute("x", String(labelWidth));
-  clonedCanvas.setAttribute("y", "0");
-  clonedCanvas.setAttribute("width", String(outputTimelineWidth));
-  clonedCanvas.setAttribute("height", String(height));
-  clonedCanvas.setAttribute(
-    "viewBox",
-    `${sourceStartX} 0 ${sourceRangeWidth} ${height}`,
-  );
-  clonedCanvas.setAttribute("preserveAspectRatio", "none");
-
-  clonedCanvas
-    .querySelectorAll<SVGElement>(".canvas-background")
-    .forEach((element) => element.style.setProperty("fill", "#ffffff"));
-  clonedCanvas
-    .querySelectorAll<SVGElement>(".grid-minor")
-    .forEach((element) => element.style.setProperty("stroke", "#f0f1f5"));
-  clonedCanvas
-    .querySelectorAll<SVGElement>(".grid-major, .row-divider")
-    .forEach((element) => element.style.setProperty("stroke", "#dfe1e8"));
-  clonedCanvas
-    .querySelectorAll<SVGElement>(".axis line")
-    .forEach((element) => element.style.setProperty("stroke", "#c8cad3"));
-  clonedCanvas
-    .querySelectorAll<SVGElement>(".axis text")
-    .forEach((element) => element.style.setProperty("fill", "#686a78"));
-  clonedCanvas
-    .querySelectorAll<SVGElement>(".data-logic-line, .data-transition-line")
-    .forEach((element) => element.style.setProperty("stroke", "#0b8c73"));
-  clonedCanvas
-    .querySelectorAll<SVGElement>(".data-high-z-line")
-    .forEach((element) => element.style.setProperty("stroke", "#686a78"));
-  clonedCanvas
-    .querySelectorAll<SVGElement>(".data-state-label")
-    .forEach((element) => {
-      element.style.setProperty("fill", "#20212b");
-      element.style.setProperty("stroke", "#ffffff");
-    });
-  clonedCanvas
-    .querySelectorAll<SVGElement>(".data-symbol-shape")
-    .forEach((element) => {
-      const tokenColor =
-        element.parentElement?.style.getPropertyValue("--token-color");
-      if (!tokenColor) return;
-      element.style.setProperty("fill", `${tokenColor}22`);
-      element.style.setProperty("stroke", tokenColor);
-    });
-  clonedCanvas
-    .querySelectorAll<SVGElement>(".data-symbol-label")
-    .forEach((element) => {
-      const tokenColor =
-        element.parentElement?.style.getPropertyValue("--token-color");
-      if (tokenColor) element.style.setProperty("fill", tokenColor);
-    });
-
-  exported.appendChild(clonedCanvas);
-  return `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(exported)}`;
-}
-
-function isTimingProject(value: unknown): value is TimingProject {
-  if (!value || typeof value !== "object") return false;
-  const project = value as Partial<TimingProject>;
-  return (project.version === 2 || project.version === 3) && Array.isArray(project.signals);
-}
 
 function App() {
   const [project, setProject] = useState<TimingProject>(initialProject);
@@ -443,7 +142,6 @@ function App() {
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [isCanvasPanning, setIsCanvasPanning] = useState(false);
-  const [isWindowMaximized, setIsWindowMaximized] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [axisSelection, setAxisSelection] = useState<AxisSelection | null>(null);
   const [signalsPanelOpen, setSignalsPanelOpen] = useState(false);
@@ -467,8 +165,6 @@ function App() {
     startWidth: number;
     startX: number;
   } | null>(null);
-  const { setColorScheme } = useMantineColorScheme();
-  const colorScheme = useComputedColorScheme("light");
   const desktopPlatform = window.chronaWindow?.platform ?? "web";
 
   const signalNameKey = project.signals
@@ -479,13 +175,6 @@ function App() {
     if (!isLabelWidthAuto) return;
     setLabelWidth(autoLabelWidth(project.signals));
   }, [isLabelWidthAuto, signalNameKey]);
-
-  useEffect(() => {
-    const controls = window.chronaWindow;
-    if (!controls || controls.platform !== "win32") return;
-    void controls.isMaximized().then(setIsWindowMaximized);
-    return controls.onMaximizedChange(setIsWindowMaximized);
-  }, []);
 
   const visibleSignals = useMemo(
     () => project.signals.filter((signal) => signal.visible),
@@ -1253,7 +942,7 @@ function App() {
   };
 
   const saveProject = () => {
-    downloadFile(
+    downloadTextFile(
       `${project.name.toLowerCase().replace(/\s+/g, "-")}.chrona.json`,
       JSON.stringify(project, null, 2),
       "application/json",
@@ -1319,7 +1008,7 @@ function App() {
       project.durationPs,
       outputTimelineWidth,
     );
-    downloadFile(
+    downloadTextFile(
       `${project.name.toLowerCase().replace(/\s+/g, "-")}.svg`,
       source,
       "image/svg+xml",
@@ -1335,67 +1024,25 @@ function App() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      try {
-        const loaded: unknown = JSON.parse(String(reader.result));
-        if (!isTimingProject(loaded)) {
-          setStatusMessage("This project uses an unsupported schema");
-          return;
-        }
-        const normalizedProject: TimingProject = {
-          ...loaded,
-          version: 3,
-          durationPs: Math.max(1, loaded.durationPs || initialProject.durationPs),
-          signals: loaded.signals.map((signal) =>
-            signal.kind === "data"
-              ? {
-                  ...signal,
-                  sourceType: signal.sourceType ?? "pattern",
-                }
-              : signal,
-          ),
-          signalGroups: loaded.signalGroups ?? [],
-          delayLinks: (
-            loaded.delayLinks ??
-            (loaded.linkedTiming
-              ? [loaded.linkedTiming.clock, loaded.linkedTiming.data]
-              : [])
-          ).map((link, index) => ({
-            ...link,
-            id: link.id ?? crypto.randomUUID(),
-            label: link.label?.trim() || `t${index + 1}`,
-          })),
-          timingConstraints:
-            loaded.timingConstraints ??
-            (loaded.linkedTiming
-              ? [
-                  {
-                    id: crypto.randomUUID(),
-                    sourceSignalId:
-                      loaded.linkedTiming.clock.targetSignalId,
-                    targetSignalId:
-                      loaded.linkedTiming.data.targetSignalId,
-                    sourceEdge: loaded.linkedTiming.clock.targetEdge,
-                    targetEdge: loaded.linkedTiming.data.targetEdge,
-                    setupPs: loaded.linkedTiming.setupPs,
-                    holdPs: loaded.linkedTiming.holdPs,
-                  },
-                ]
-              : []),
-          linkedTiming: undefined,
-          canvasSettings: {
-            ...DEFAULT_CANVAS_SETTINGS,
-            ...(loaded.canvasSettings ?? {}),
-          },
-        };
-        setProject(normalizedProject);
-        setSelectedId(loaded.signals[0]?.id ?? "");
-        setExportStartPs(0);
-        setExportEndPs(normalizedProject.durationPs);
-        setIsLabelWidthAuto(true);
-        setStatusMessage(`${loaded.name} opened`);
-      } catch {
-        setStatusMessage("Could not read this project file");
+      const result = parseTimingProject(String(reader.result), {
+        canvasSettings: DEFAULT_CANVAS_SETTINGS,
+        durationPs: initialProject.durationPs,
+      });
+      if (!result.ok) {
+        setStatusMessage(
+          result.reason === "unsupported"
+            ? "This project uses an unsupported schema"
+            : "Could not read this project file",
+        );
+        return;
       }
+
+      setProject(result.project);
+      setSelectedId(result.project.signals[0]?.id ?? "");
+      setExportStartPs(0);
+      setExportEndPs(result.project.durationPs);
+      setIsLabelWidthAuto(true);
+      setStatusMessage(`${result.project.name} opened`);
     };
     reader.readAsText(file);
     event.target.value = "";
@@ -1714,156 +1361,22 @@ function App() {
 
   return (
     <div className="app-shell" data-platform={desktopPlatform}>
-      <header className="topbar">
-        <div className="brand">
-          <div className="brand-mark" aria-hidden="true">
-            <img src={chronaIcon} alt="" />
-          </div>
-          <div>
-            <div className="brand-name">Chrona</div>
-            <div className="brand-meta">TIMING STUDIO</div>
-          </div>
-        </div>
-
-        <div className="topbar-actions">
-          <Tooltip label="Open project">
-            <ActionIcon
-              variant="subtle"
-              color="gray"
-              size="lg"
-              aria-label="Open project"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <FolderOpen size={18} />
-            </ActionIcon>
-          </Tooltip>
-          <input
-            ref={fileInputRef}
-            className="visually-hidden"
-            type="file"
-            accept=".json,.chrona.json"
-            onChange={openProject}
-          />
-          <Tooltip label="Save project">
-            <ActionIcon
-              variant="subtle"
-              color="gray"
-              size="lg"
-              aria-label="Save project"
-              onClick={saveProject}
-            >
-              <Save size={18} />
-            </ActionIcon>
-          </Tooltip>
-          <Tooltip
-            label={`Switch to ${colorScheme === "dark" ? "light" : "dark"} theme`}
-          >
-            <ActionIcon
-              variant="subtle"
-              color="gray"
-              size="lg"
-              aria-label="Toggle color theme"
-              onClick={() =>
-                setColorScheme(colorScheme === "dark" ? "light" : "dark")
-              }
-            >
-              {colorScheme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
-            </ActionIcon>
-          </Tooltip>
-          <Popover
-            opened={exportPanelOpen}
-            onChange={setExportPanelOpen}
-            position="bottom-end"
-            width={356}
-            shadow="md"
-            withArrow
-          >
-            <Popover.Target>
-              <Button
-                leftSection={<Download size={16} />}
-                size="sm"
-                onClick={() => setExportPanelOpen((opened) => !opened)}
-              >
-                Export SVG
-              </Button>
-            </Popover.Target>
-            <Popover.Dropdown className="export-panel">
-              <div className="export-panel-heading">
-                <div>
-                  <strong>Export SVG</strong>
-                  <span>Choose the exact timeline to include</span>
-                </div>
-              </div>
-              <SegmentedControl
-                fullWidth
-                value={exportMode}
-                onChange={(value) => setExportMode(value as ExportMode)}
-                data={[
-                  { label: "Current view", value: "view" },
-                  { label: "Time range", value: "range" },
-                  { label: "All time", value: "all" },
-                ]}
-              />
-              {exportMode === "range" && (
-                <div className="export-range-fields">
-                  <NumberInput
-                    label="Start"
-                    suffix=" ps"
-                    min={0}
-                    max={project.durationPs}
-                    value={exportStartPs}
-                    onChange={(value) => setExportStartPs(Number(value) || 0)}
-                  />
-                  <NumberInput
-                    label="End"
-                    suffix=" ps"
-                    min={0}
-                    max={project.durationPs}
-                    value={exportEndPs}
-                    error={exportEndPs <= exportStartPs ? "After start" : undefined}
-                    onChange={(value) =>
-                      setExportEndPs(Number(value) || project.durationPs)
-                    }
-                  />
-                </div>
-              )}
-              <div className="export-summary">
-                {exportMode === "view" && "Exports the timeline currently visible in the canvas."}
-                {exportMode === "range" &&
-                  `${formatAxisTime(exportStartPs)} – ${formatAxisTime(exportEndPs)}`}
-                {exportMode === "all" &&
-                  `Exports the full ${formatAxisTime(project.durationPs)} project.`}
-              </div>
-              <Button fullWidth leftSection={<Download size={15} />} onClick={exportSvg}>
-                Export SVG
-              </Button>
-            </Popover.Dropdown>
-          </Popover>
-        </div>
-        {desktopPlatform === "win32" && (
-          <div className="window-controls" aria-label="Window controls">
-            <UnstyledButton
-              aria-label="Minimize window"
-              onClick={() => window.chronaWindow?.minimize()}
-            >
-              <Minus size={16} />
-            </UnstyledButton>
-            <UnstyledButton
-              aria-label={isWindowMaximized ? "Restore window" : "Maximize window"}
-              onClick={() => window.chronaWindow?.toggleMaximize()}
-            >
-              {isWindowMaximized ? <Copy size={13} /> : <Square size={13} />}
-            </UnstyledButton>
-            <UnstyledButton
-              className="window-close"
-              aria-label="Close window"
-              onClick={() => window.chronaWindow?.close()}
-            >
-              <X size={17} />
-            </UnstyledButton>
-          </div>
-        )}
-      </header>
+      <ProjectHeader
+        durationPs={project.durationPs}
+        exportEndPs={exportEndPs}
+        exportMode={exportMode}
+        exportPanelOpen={exportPanelOpen}
+        exportStartPs={exportStartPs}
+        fileInputRef={fileInputRef}
+        formatTime={formatAxisTime}
+        onExport={exportSvg}
+        onExportEndChange={setExportEndPs}
+        onExportModeChange={setExportMode}
+        onExportPanelOpenChange={setExportPanelOpen}
+        onExportStartChange={setExportStartPs}
+        onOpenProject={openProject}
+        onSaveProject={saveProject}
+      />
 
       <div className="workspace">
         <main className="editor">
@@ -2674,167 +2187,47 @@ function App() {
           </div>
         </main>
 
-        <aside className="property-panel">
-          <div className="panel-heading property-heading">
-            <div>
-              <span className="eyebrow">INSPECTOR</span>
-              <h2>Properties</h2>
-            </div>
-            {selected && (
-              <Badge
-                variant="light"
-                color={selected.kind === "clock" ? "violet" : "teal"}
-              >
-                {isSequentialDataSignal(selected)
-                  ? selected.derivation.device
-                  : selected.kind}
-              </Badge>
-            )}
-          </div>
-
-          {selected && (
-            <div className="property-content">
-              <section className="property-section">
-                <div className="section-title">
-                  <span>Signal</span>
-                  <span className="section-index">01</span>
-                </div>
-                <TextInput
-                  label="Name"
-                  value={selected.name}
-                  onChange={(event) => updateSelected({ name: event.target.value })}
-                />
-                {!isSequentialDataSignal(selected) && (
-                  <ConvertibleTimeInput
-                    label="Start"
-                    description={`Relative to ${referenceClock?.name ?? "reference clock"}`}
-                    valuePs={selected.startPs}
-                    referencePeriodPs={referencePeriodPs}
-                    onChange={(startPs) => updateSelected({ startPs })}
-                  />
-                )}
-              </section>
-
-              {!isSequentialDataSignal(selected) && (
-              <section className="property-section">
-                <div className="section-title">
-                  <span>Timing</span>
-                  <span className="section-index">02</span>
-                </div>
-                <RateInput
-                  periodPs={selected.periodPs}
-                  onChange={(periodPs) => updateSelected({ periodPs })}
-                />
-
-                {selected.kind === "clock" && (
-                  <>
-                    <ConvertibleTimeInput
-                      label="Clock phase"
-                      description="Same value, editable as time or angle"
-                      valuePs={selected.phasePs}
-                      referencePeriodPs={selected.periodPs}
-                      onChange={(phasePs) => updateSelected({ phasePs })}
-                    />
-                    <div className="slider-field">
-                      <div className="slider-label">
-                        <span>Duty cycle</span>
-                        <strong>{Math.round(selected.dutyCycle * 100)}%</strong>
-                      </div>
-                      <Slider
-                        min={10}
-                        max={90}
-                        step={5}
-                        value={selected.dutyCycle * 100}
-                        label={(value) => `${value}%`}
-                        onChange={(value) =>
-                          updateSelected({ dutyCycle: value / 100 })
-                        }
-                      />
-                    </div>
-                  </>
-                )}
-              </section>
-              )}
-
-              {selected.kind === "data" && !isSequentialDataSignal(selected) && (
-                <section className="property-section pattern-section">
-                  <div className="section-title">
-                    <span>Pattern builder</span>
-                    <span className="section-index">03</span>
-                  </div>
-                  <DataPatternEditor
-                    key={selected.id}
-                    pattern={selected.pattern}
-                    segments={selected.patternSegments}
-                    onChange={(
-                      pattern: string[],
-                      patternSegments: DataPatternSegment[],
-                    ) => updateSelected({ pattern, patternSegments })}
-                  />
-                </section>
-              )}
-
-              {isSequentialDataSignal(selected) && (
-                <section className="property-section sequential-section">
-                  <div className="section-title">
-                    <span>Sequential logic</span>
-                    <span className="section-index">02</span>
-                  </div>
-                  <SequentialSignalEditor
-                    selected={selected}
-                    signals={project.signals}
-                    error={resolvedSequentialSignals.errors[selected.id]}
-                    onChange={(derivation) =>
-                      updateSelected({ derivation } as Partial<Signal>)
-                    }
-                  />
-                </section>
-              )}
-
-              <section className="property-section linked-timing-section">
-                <div className="section-title">
-                  <span>Signal timing</span>
-                  <span className="section-index">04</span>
-                </div>
-                <SignalTimingEditor
-                  durationPs={project.durationPs}
-                  signals={project.signals}
-                  selected={selected}
-                  edgeTimes={(signal, polarity) =>
-                    resolvedProjectTiming.edgeTimes(signal.id, polarity)
-                  }
-                  delayLink={selectedDelayLink}
-                  constraint={selectedConstraint}
-                  onAddDelay={addSelectedDelay}
-                  onChangeDelay={updateSelectedDelay}
-                  onRemoveDelay={() => {
-                    setProject((current) => ({
-                      ...current,
-                      delayLinks: (current.delayLinks ?? []).filter(
-                        (link) => link.targetSignalId !== selected.id,
-                      ),
-                    }));
-                    setStatusMessage(`${selected.name} delay removed`);
-                  }}
-                  onAddConstraint={addSelectedConstraint}
-                  onChangeConstraint={updateSelectedConstraint}
-                  onRemoveConstraint={() => {
-                    setProject((current) => ({
-                      ...current,
-                      timingConstraints: (
-                        current.timingConstraints ?? []
-                      ).filter(
-                        (constraint) =>
-                          constraint.targetSignalId !== selected.id,
-                      ),
-                    }));
-                    setStatusMessage(`${selected.name} constraint removed`);
-                  }}
-                />
-              </section>
-            </div>
-          )}
-        </aside>
+        <PropertyPanel
+          project={project}
+          selected={selected}
+          referenceClock={referenceClock}
+          referencePeriodPs={referencePeriodPs}
+          sequentialError={
+            isSequentialDataSignal(selected)
+              ? resolvedSequentialSignals.errors[selected.id]
+              : undefined
+          }
+          edgeTimes={(signal, polarity) =>
+            resolvedProjectTiming.edgeTimes(signal.id, polarity)
+          }
+          delayLink={selectedDelayLink}
+          constraint={selectedConstraint}
+          onUpdateSelected={updateSelected}
+          onAddDelay={addSelectedDelay}
+          onChangeDelay={updateSelectedDelay}
+          onRemoveDelay={() => {
+            if (!selected) return;
+            setProject((current) => ({
+              ...current,
+              delayLinks: (current.delayLinks ?? []).filter(
+                (link) => link.targetSignalId !== selected.id,
+              ),
+            }));
+            setStatusMessage(`${selected.name} delay removed`);
+          }}
+          onAddConstraint={addSelectedConstraint}
+          onChangeConstraint={updateSelectedConstraint}
+          onRemoveConstraint={() => {
+            if (!selected) return;
+            setProject((current) => ({
+              ...current,
+              timingConstraints: (current.timingConstraints ?? []).filter(
+                (constraint) => constraint.targetSignalId !== selected.id,
+              ),
+            }));
+            setStatusMessage(`${selected.name} constraint removed`);
+          }}
+        />
       </div>
     </div>
   );

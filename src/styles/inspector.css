@@ -1,0 +1,604 @@
+.statusbar {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 0 12px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text-faint);
+  font-size: 9px;
+  font-family: var(--mantine-font-family-monospace);
+}
+
+.statusbar > :nth-child(2) {
+  margin-left: auto;
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--teal);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 12%, transparent);
+}
+
+.property-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-width: thin;
+  padding: 0 12px 16px;
+}
+
+.property-content::-webkit-scrollbar {
+  width: 9px;
+}
+
+.property-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.property-content::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--border-strong);
+  background-clip: padding-box;
+}
+
+.property-content::-webkit-scrollbar-thumb:hover {
+  background: var(--text-faint);
+  background-clip: padding-box;
+}
+
+.property-section {
+  padding: 12px 2px;
+  border-bottom: 1px solid var(--border);
+}
+
+.section-title,
+.slider-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.section-title {
+  margin-bottom: 9px;
+  color: var(--text-soft);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.section-index {
+  color: var(--text-faint);
+  font-family: var(--mantine-font-family-monospace);
+  font-weight: 400;
+}
+
+.compound-field {
+  margin-top: 10px;
+}
+
+.compound-field-label {
+  min-height: 26px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.compound-field-label label {
+  display: block;
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.compound-field-label small {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-faint);
+  font-size: 9px;
+  line-height: 1.3;
+}
+
+.rate-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 82px;
+  gap: 7px;
+}
+
+.conversion-readout {
+  margin-top: 5px;
+  color: var(--text-faint);
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 9px;
+  text-align: right;
+}
+
+.slider-field {
+  margin-top: 16px;
+}
+
+.slider-label {
+  margin-bottom: 8px;
+  color: var(--text-soft);
+  font-size: 11px;
+}
+
+.slider-label strong {
+  color: var(--text);
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 10px;
+}
+
+.pattern-section {
+  padding-bottom: 20px;
+}
+
+.linked-timing-section {
+  border-bottom: 0;
+}
+
+.sequential-signal-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.sequential-field {
+  display: grid;
+  gap: 5px;
+}
+
+.sequential-field > span {
+  color: var(--text-faint);
+  font-size: 8px;
+  font-weight: 500;
+}
+
+.delay-range-editor {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 3px 0 0;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel-subtle);
+}
+
+.delay-range-editor legend {
+  padding: 0 5px;
+  color: var(--text-soft);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.delay-range-inputs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.sequential-signal-editor .mantine-InputWrapper-label,
+.delay-range-editor .mantine-InputWrapper-label {
+  color: var(--text-faint);
+  font-size: 8px;
+}
+
+.sequential-signal-editor .mantine-Input-input,
+.delay-range-editor .mantine-Input-input {
+  min-height: 30px;
+  height: 30px;
+  font-size: 9px;
+}
+
+.sequential-helper {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.sequential-error {
+  padding: 7px 8px;
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  color: var(--danger);
+  font-size: 9px;
+}
+
+.linked-timing-empty p {
+  margin: 0 0 10px;
+  color: var(--text-faint);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.linked-timing-empty small {
+  display: block;
+  margin-top: 7px;
+  color: var(--text-faint);
+  font-size: 8px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.linked-timing-editor {
+  display: grid;
+  gap: 15px;
+}
+
+.linked-path-group {
+  display: grid;
+  gap: 9px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--border);
+}
+
+.linked-path-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text-soft);
+  font-size: 10px;
+}
+
+.linked-path-heading strong {
+  color: var(--text);
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 10px;
+}
+
+.linked-field-pair,
+.linked-window-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 82px;
+  gap: 7px;
+}
+
+.linked-delay-bounds,
+.linked-window-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.linked-timing-editor .mantine-InputWrapper-label {
+  color: var(--text-faint);
+  font-size: 8px;
+}
+
+.linked-timing-editor .mantine-Input-input {
+  min-height: 30px;
+  height: 30px;
+  font-size: 9px;
+}
+
+.signal-timing-editor {
+  display: grid;
+  gap: 14px;
+}
+
+.signal-timing-block {
+  display: grid;
+  gap: 7px;
+}
+
+.signal-timing-block + .signal-timing-block {
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.signal-timing-title {
+  color: var(--text-soft);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.signal-timing-empty p {
+  margin: 0 0 9px;
+  color: var(--text-faint);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.signal-timing-form {
+  display: grid;
+  gap: 7px;
+}
+
+.signal-timing-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text-faint);
+  font-size: 9px;
+}
+
+.signal-timing-heading strong {
+  color: var(--text);
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 10px;
+}
+
+.signal-delay-meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 76px;
+  align-items: end;
+  gap: 7px;
+}
+
+.signal-delay-current {
+  min-height: 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.signal-delay-current span {
+  color: var(--text-faint);
+  font-size: 8px;
+}
+
+.signal-delay-current strong {
+  color: var(--text);
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 10px;
+}
+
+.timing-field-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.signal-timing-editor .mantine-InputWrapper-label {
+  color: var(--text-faint);
+  font-size: 8px;
+}
+
+.signal-timing-editor .mantine-Input-input {
+  min-height: 30px;
+  height: 30px;
+  font-size: 9px;
+}
+
+.constraint-form {
+  gap: 8px;
+}
+
+.constraint-edge-group {
+  display: grid;
+  gap: 5px;
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel-subtle);
+}
+
+.constraint-edge-heading {
+  color: var(--text-faint);
+  font-size: 8px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.constraint-source-row,
+.constraint-target-row {
+  display: grid;
+  gap: 5px;
+}
+
+.constraint-source-row {
+  grid-template-columns: minmax(0, 1fr) 92px;
+}
+
+.constraint-target-row {
+  grid-template-columns: 92px minmax(0, 1fr);
+}
+
+.signal-timing-editor .mantine-MultiSelect-input {
+  min-height: 30px;
+  height: auto;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+.signal-timing-editor .mantine-Pill-root {
+  height: 20px;
+  font-size: 8px;
+}
+
+.pattern-segment-list {
+  display: grid;
+  gap: 8px;
+}
+
+.pattern-segment {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--panel-subtle);
+  transition:
+    border-color 160ms ease,
+    opacity 160ms ease;
+}
+
+.pattern-segment.drag-over {
+  border-top-color: var(--violet);
+  box-shadow: inset 0 2px 0 var(--violet);
+}
+
+.pattern-segment:active {
+  opacity: 0.78;
+}
+
+.segment-toolbar {
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: 24px 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 5px 3px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.segment-grip {
+  cursor: grab;
+}
+
+.segment-grip:hover {
+  color: var(--text-soft);
+}
+
+.segment-index {
+  color: var(--text-faint);
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 8px;
+}
+
+.segment-kind-select {
+  width: 96px;
+}
+
+.segment-kind-select .mantine-Input-input {
+  min-height: 26px;
+  height: 26px;
+  border-color: transparent;
+  background: transparent;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.segment-kind-select .mantine-Input-input:hover {
+  background: var(--panel-subtle);
+}
+
+.segment-actions {
+  display: flex;
+  gap: 1px;
+}
+
+.segment-fields {
+  display: grid;
+  gap: 6px;
+  padding: 9px;
+}
+
+.range-fields {
+  grid-template-columns: 1.15fr repeat(4, minmax(0, 1fr));
+}
+
+.two-fields,
+.symbols-fields {
+  grid-template-columns: minmax(0, 1fr) 64px;
+}
+
+.segment-field {
+  min-width: 0;
+}
+
+.segment-field > span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-faint);
+  font-size: 8px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.segment-field .mantine-Input-input {
+  width: 100%;
+  height: 30px;
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 10px;
+}
+
+.segment-field small {
+  display: block;
+  min-height: 11px;
+  margin-top: 3px;
+  color: var(--danger);
+  font-size: 8px;
+  line-height: 1.2;
+}
+
+.add-segment-button {
+  margin-top: 9px;
+}
+
+.analysis-paused {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 9px;
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 9px;
+  color: var(--text-faint);
+  background: var(--panel-subtle);
+}
+
+.analysis-paused strong {
+  display: block;
+  color: var(--text-soft);
+  font-size: 10px;
+}
+
+.analysis-paused p {
+  margin: 4px 0 0;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.mantine-InputWrapper-label,
+.mantine-InputWrapper-description {
+  font-size: 10px;
+}
+
+.mantine-InputWrapper-description {
+  margin-bottom: 5px;
+  color: var(--text-faint);
+}
+
+.mantine-Input-input {
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 11px;
+}
+
+/* Mantine's default full-height stepper includes its own border and can exceed
+   compact inputs by two pixels. Pin it inside the input border everywhere. */
+.mantine-NumberInput-controls {
+  top: 1px;
+  right: 1px;
+  bottom: 1px;
+  height: auto;
+  overflow: hidden;
+  border-radius: 0 calc(var(--input-radius, 4px) - 1px)
+    calc(var(--input-radius, 4px) - 1px) 0;
+}
+
+.mantine-NumberInput-control {
+  min-height: 0;
+  height: 50%;
+}
+
+.mantine-SegmentedControl-label {
+  font-size: 9px;
+}

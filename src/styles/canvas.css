@@ -1,0 +1,760 @@
+.canvas-viewport {
+  min-height: 0;
+  overflow: auto;
+  background: var(--canvas);
+  overscroll-behavior: contain;
+  scroll-behavior: auto;
+}
+
+.canvas-content {
+  display: grid;
+  align-items: start;
+  position: relative;
+}
+
+.fixed-signal-labels {
+  position: sticky;
+  left: 0;
+  z-index: 6;
+  background: color-mix(in srgb, var(--panel) 96%, transparent);
+}
+
+.signal-column-resizer {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  z-index: 8;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.signal-column-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+  background: var(--border);
+  transition: background 160ms ease, box-shadow 160ms ease;
+}
+
+.signal-column-resizer:hover::after,
+.signal-column-resizer:focus-visible::after {
+  background: var(--violet);
+  box-shadow: 0 0 0 2px var(--violet-soft);
+}
+
+.signal-column-resizer:focus-visible {
+  outline: none;
+}
+
+.axis-label {
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 13px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-faint);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.axis-label small {
+  overflow: hidden;
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track-header {
+  --track-hover-surface: color-mix(in srgb, var(--panel) 90%, var(--violet));
+  position: relative;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  gap: 3px;
+  padding: 0 6px;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  transition: background 160ms ease;
+}
+
+.track-actions {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  bottom: 4px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 3px 0 7px;
+  border-radius: 6px;
+  background: var(--track-hover-surface);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(5px);
+  transition: opacity 160ms ease, transform 180ms ease-out;
+}
+
+.track-actions::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -18px;
+  width: 18px;
+  background: linear-gradient(90deg, transparent, var(--track-hover-surface));
+  pointer-events: none;
+}
+
+.track-actions .mantine-ActionIcon-root {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-soft);
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.track-actions .mantine-ActionIcon-root:hover {
+  background: color-mix(in srgb, var(--violet) 14%, transparent);
+  color: var(--violet);
+}
+
+.track-actions .mantine-ActionIcon-root[aria-label^="Delete"] {
+  color: color-mix(in srgb, var(--danger) 78%, var(--text-soft));
+}
+
+.track-actions .mantine-ActionIcon-root[aria-label^="Delete"]:hover {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+
+.track-header:hover .track-actions,
+.track-actions:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.track-header:hover,
+.track-header.selected {
+  background: var(--track-hover-surface);
+}
+
+.track-header.drag-over {
+  box-shadow: inset 0 2px 0 var(--violet);
+}
+
+.track-drag-grip {
+  color: var(--text-faint);
+  cursor: grab;
+}
+
+.track-header:active .track-drag-grip {
+  cursor: grabbing;
+}
+
+.track-select {
+  appearance: none;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.track-select:focus-visible,
+.track-header .mantine-ActionIcon-root:focus-visible {
+  outline: 2px solid var(--violet);
+  outline-offset: -2px;
+}
+
+.track-select > span {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.delete-confirmation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 8px;
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.delete-confirmation > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.delete-confirmation > div {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 2px;
+}
+
+.signals-panel,
+.export-panel {
+  padding: 12px;
+  border-color: var(--border);
+  background: var(--panel);
+}
+
+.signals-panel-heading,
+.export-panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 11px;
+}
+
+.signals-panel-heading > div:first-child,
+.export-panel-heading > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.signals-panel-heading strong,
+.export-panel-heading strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.signals-panel-heading span,
+.export-panel-heading span {
+  color: var(--text-faint);
+  font-size: 9px;
+}
+
+.signals-panel-heading > div:last-child {
+  display: flex;
+  gap: 1px;
+}
+
+.signal-groups-scroll {
+  max-height: min(420px, 55vh);
+  margin: 10px -4px 0;
+  padding: 0 4px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.signal-group {
+  border-bottom: 1px solid var(--border);
+}
+
+.signal-group-heading {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.signal-group-toggle {
+  min-width: 0;
+  min-height: 32px;
+  flex: 1;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 5px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-soft);
+  text-align: left;
+}
+
+.signal-group-toggle:hover,
+.signal-group-toggle:focus-visible {
+  background: var(--panel-subtle);
+  color: var(--text);
+}
+
+.signal-group-toggle:focus-visible {
+  outline: 2px solid var(--violet);
+  outline-offset: -2px;
+}
+
+.signal-group-toggle span {
+  overflow: hidden;
+  font-size: 10px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.signal-group-toggle small {
+  min-width: 20px;
+  padding: 2px 5px;
+  border-radius: 99px;
+  background: var(--panel-subtle);
+  color: var(--text-faint);
+  font-size: 8px;
+  text-align: center;
+}
+
+.signal-group-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 1px;
+}
+
+.signal-manager-list {
+  display: grid;
+  gap: 2px;
+  padding: 0 0 7px 15px;
+}
+
+.signal-manager-row {
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 104px;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 3px;
+  border-radius: 6px;
+}
+
+.signal-manager-row:hover {
+  background: var(--panel-subtle);
+}
+
+.signal-manager-name {
+  min-width: 0;
+  min-height: 28px;
+  display: grid;
+  grid-template-columns: 7px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.signal-manager-name:focus-visible {
+  outline: 2px solid var(--violet);
+  outline-offset: -2px;
+}
+
+.signal-manager-name span:last-child {
+  overflow: hidden;
+  font-size: 10px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.signal-color-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 99px;
+}
+
+.signal-group-select {
+  min-width: 0;
+  width: 104px;
+}
+
+.signal-group-select .mantine-Input-input {
+  height: 26px;
+  min-height: 26px;
+  padding: 0 24px 0 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--text-soft);
+  font-family: var(--mantine-font-family);
+  font-size: 9px;
+}
+
+.signal-group-select .mantine-Input-input:focus {
+  border-color: var(--violet);
+  box-shadow: 0 0 0 2px var(--violet-soft);
+}
+
+.signal-group-select .mantine-Input-section {
+  width: 24px;
+  color: var(--text-faint);
+}
+
+.signal-group-dropdown {
+  padding: 4px;
+  border-color: var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+}
+
+.signal-group-option {
+  min-height: 28px;
+  padding: 6px 8px;
+  border-radius: 5px;
+  color: var(--text-soft);
+  font-size: 9px;
+}
+
+.signal-group-option[data-combobox-active],
+.signal-group-option:hover {
+  background: var(--violet-soft);
+  color: var(--text);
+}
+
+.signal-manager-empty {
+  padding: 18px 10px;
+  color: var(--text-faint);
+  font-size: 9px;
+  text-align: center;
+}
+
+.create-group-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.export-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.grid-settings-panel {
+  display: grid;
+  gap: 10px;
+  padding: 11px;
+  border-color: var(--border);
+  background: var(--panel);
+}
+
+.grid-settings-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.grid-settings-heading strong,
+.canvas-layout-settings > strong {
+  color: var(--text);
+  font-size: 11px;
+}
+
+.canvas-layout-settings {
+  display: grid;
+  gap: 7px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.grid-settings-panel .mantine-InputWrapper-label {
+  font-size: 9px;
+}
+
+.export-panel-heading {
+  margin-bottom: 0;
+}
+
+.export-range-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.export-summary {
+  min-height: 34px;
+  padding: 8px 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel-subtle);
+  color: var(--text-faint);
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.timing-canvas {
+  display: block;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.timing-canvas.is-panning {
+  cursor: grabbing;
+}
+
+.timing-canvas.is-selecting {
+  cursor: crosshair;
+}
+
+.canvas-background {
+  fill: var(--canvas);
+}
+
+.axis-hitbox {
+  fill: transparent;
+  cursor: crosshair;
+}
+
+.time-selection {
+  fill: color-mix(in srgb, var(--violet) 14%, transparent);
+  stroke: var(--violet);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.grid line {
+  shape-rendering: crispEdges;
+}
+
+.grid-minor {
+  stroke: var(--canvas-grid);
+}
+
+.grid-major {
+  stroke: var(--canvas-grid-strong);
+}
+
+.axis line {
+  stroke: var(--border-strong);
+}
+
+.axis text {
+  fill: var(--text-faint);
+  font-size: 9px;
+  font-family: var(--mantine-font-family-monospace);
+}
+
+.row-hitbox {
+  fill: transparent;
+}
+
+.row-divider {
+  stroke: var(--canvas-grid-strong);
+  shape-rendering: crispEdges;
+}
+
+.wave-path,
+.wave-path-glow {
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+}
+
+.wave-start-continuity {
+  pointer-events: none;
+}
+
+.wave-prelude {
+  stroke-width: 1.5;
+  stroke-dasharray: 3 3;
+  opacity: 0.42;
+  vector-effect: non-scaling-stroke;
+}
+
+.wave-start-guide {
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+  opacity: 0.28;
+  vector-effect: non-scaling-stroke;
+}
+
+.wave-path {
+  stroke-width: 2;
+}
+
+.wave-path-glow {
+  stroke-width: 8;
+  opacity: 0.08;
+}
+
+.linked-timing-window,
+.linked-delay-range,
+.linked-delay-link,
+.sequential-guides {
+  pointer-events: none;
+}
+
+.latch-transparent-window {
+  fill: color-mix(in srgb, var(--violet) 5%, transparent);
+  stroke: color-mix(in srgb, var(--violet) 14%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 2 5;
+  vector-effect: non-scaling-stroke;
+}
+
+.sequential-delay-range rect {
+  fill: color-mix(in srgb, var(--teal) 7%, transparent);
+}
+
+.sequential-delay-range.is-c2q rect {
+  fill: color-mix(in srgb, var(--violet) 8%, transparent);
+}
+
+.sequential-delay-range line {
+  stroke: var(--text-faint);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+  opacity: 0.38;
+  vector-effect: non-scaling-stroke;
+}
+
+.sequential-delay-range text {
+  fill: var(--text-faint);
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 7px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: var(--canvas);
+  stroke-width: 2px;
+}
+
+.linked-timing-window rect {
+  fill: color-mix(in srgb, var(--text-faint) 6%, transparent);
+  stroke: color-mix(in srgb, var(--text-faint) 10%, transparent);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.linked-timing-window line {
+  stroke: var(--text-faint);
+  stroke-width: 1;
+  opacity: 0.2;
+  vector-effect: non-scaling-stroke;
+}
+
+.linked-timing-window.is-violated rect {
+  fill: color-mix(in srgb, var(--danger) 16%, transparent);
+  stroke: color-mix(in srgb, var(--danger) 34%, transparent);
+}
+
+.linked-timing-window.is-violated line {
+  stroke: color-mix(in srgb, var(--danger) 56%, var(--text-faint));
+  opacity: 0.44;
+}
+
+.linked-delay-range line {
+  stroke: var(--text-faint);
+  stroke-width: 1;
+  stroke-dasharray: 3 5;
+  opacity: 0.18;
+  vector-effect: non-scaling-stroke;
+}
+
+.linked-delay-link line {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.linked-delay-link .linked-delay-measure {
+  stroke: var(--text-faint);
+}
+
+.linked-delay-link circle {
+  fill: var(--text-soft);
+  stroke: var(--canvas);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.linked-delay-link text {
+  fill: var(--text-faint);
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 8px;
+  paint-order: stroke;
+  stroke: var(--canvas);
+  stroke-width: 3px;
+}
+
+.data-symbol-shape {
+  fill: color-mix(in srgb, var(--token-color) 15%, transparent);
+  stroke: var(--token-color);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.data-symbol-label {
+  fill: var(--token-color);
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 10px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.data-logic-line {
+  stroke: var(--teal);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.data-transition-line {
+  fill: none;
+  stroke: var(--teal);
+  stroke-width: 2;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.data-unknown-fill {
+  fill: url("#unknown-hatch");
+  stroke: color-mix(in srgb, var(--text-soft) 78%, var(--text));
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.unknown-hatch-line {
+  stroke: color-mix(in srgb, var(--text-faint) 58%, transparent);
+  stroke-width: 3;
+}
+
+.data-high-z-line {
+  stroke: var(--text-soft);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.data-state-label {
+  fill: var(--text);
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 9px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: var(--canvas);
+  stroke-width: 3px;
+  pointer-events: none;
+}

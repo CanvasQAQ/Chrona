@@ -159,6 +159,8 @@ Signal Timing 用于制作能够解释 Delay 和约束关系的 Timing Diagram �
 
 Delay 配置附着在目标 Signal，而不是项目级 Clock/Data 配对。工程文件用 `delayLinks[]` 保存每个目标 Signal 的来源、边沿序号和 Delay 范围。
 
+每个目标 Signal 只允许一个 Delay Source。波形边沿由 Signal 参数、Delay 与 Sequential Derivation 统一计算，不提供单边沿拖动或吸附，避免局部编辑与整条波形的时序语义冲突。
+
 ### 7.2 Min/Max 表达
 
 Min/Max 只在目标 Signal 轨道显示为低对比度虚线边界：
@@ -174,6 +176,7 @@ Min/Max 只在目标 Signal 轨道显示为低对比度虚线边界：
 Setup/Hold Constraint 同样从当前选中的目标 Signal 添加，并独立于 Delay：
 
 - 用户选择任意类型的 Reference Signal，并分别设置 Reference 与 Constrained 的边沿类型
+- 每个目标 Signal 只维护一条 Constraint；Reference Signal 为单一来源，但两侧边沿编号仍可多选
 - Clock 支持 Rising、Falling 或 Both；Data 支持 Any transition，并对逻辑 0/1 支持 Rising/Falling
 - Reference 与 Constrained 两侧都支持多选边沿编号；编号留空表示全部可见边沿
 - 每个被选择的 Reference edge 生成一个 Window，Window 随该 edge（包括其派生 Delay）实时移动

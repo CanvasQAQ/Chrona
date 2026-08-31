@@ -1,0 +1,197 @@
+import { Badge, Slider, TextInput } from "@mantine/core";
+import { ConvertibleTimeInput } from "../../components/ConvertibleTimeInput";
+import { DataPatternEditor } from "../../components/DataPatternEditor";
+import { RateInput } from "../../components/RateInput";
+import { SequentialSignalEditor } from "../../components/SequentialSignalEditor";
+import { SignalTimingEditor } from "../../components/SignalTimingEditor";
+import {
+  isSequentialDataSignal,
+  type ClockSignal,
+  type DataPatternSegment,
+  type EdgeDelayLink,
+  type EdgePolarity,
+  type Signal,
+  type TimingConstraint,
+  type TimingProject,
+} from "../../domain/timing";
+
+interface PropertyPanelProps {
+  constraint?: TimingConstraint;
+  delayLink?: EdgeDelayLink;
+  edgeTimes: (signal: Signal, polarity: EdgePolarity) => number[];
+  onAddConstraint: (sourceSignalId: string) => void;
+  onAddDelay: (sourceSignalId: string) => void;
+  onChangeConstraint: (patch: Partial<TimingConstraint>) => void;
+  onChangeDelay: (patch: Partial<EdgeDelayLink>) => void;
+  onRemoveConstraint: () => void;
+  onRemoveDelay: () => void;
+  onUpdateSelected: (patch: Partial<Signal>) => void;
+  project: TimingProject;
+  referenceClock?: ClockSignal;
+  referencePeriodPs: number;
+  selected?: Signal;
+  sequentialError?: string;
+}
+
+export function PropertyPanel({
+  constraint,
+  delayLink,
+  edgeTimes,
+  onAddConstraint,
+  onAddDelay,
+  onChangeConstraint,
+  onChangeDelay,
+  onRemoveConstraint,
+  onRemoveDelay,
+  onUpdateSelected,
+  project,
+  referenceClock,
+  referencePeriodPs,
+  selected,
+  sequentialError,
+}: PropertyPanelProps) {
+  return (
+    <aside className="property-panel">
+      <div className="panel-heading property-heading">
+        <div>
+          <span className="eyebrow">INSPECTOR</span>
+          <h2>Properties</h2>
+        </div>
+        {selected && (
+          <Badge
+            variant="light"
+            color={selected.kind === "clock" ? "violet" : "teal"}
+          >
+            {isSequentialDataSignal(selected)
+              ? selected.derivation.device
+              : selected.kind}
+          </Badge>
+        )}
+      </div>
+
+      {selected && (
+        <div className="property-content">
+          <section className="property-section">
+            <div className="section-title">
+              <span>Signal</span>
+              <span className="section-index">01</span>
+            </div>
+            <TextInput
+              label="Name"
+              value={selected.name}
+              onChange={(event) =>
+                onUpdateSelected({ name: event.target.value })
+              }
+            />
+            {!isSequentialDataSignal(selected) && (
+              <ConvertibleTimeInput
+                label="Start"
+                description={`Relative to ${referenceClock?.name ?? "reference clock"}`}
+                valuePs={selected.startPs}
+                referencePeriodPs={referencePeriodPs}
+                onChange={(startPs) => onUpdateSelected({ startPs })}
+              />
+            )}
+          </section>
+
+          {!isSequentialDataSignal(selected) && (
+            <section className="property-section">
+              <div className="section-title">
+                <span>Timing</span>
+                <span className="section-index">02</span>
+              </div>
+              <RateInput
+                periodPs={selected.periodPs}
+                onChange={(periodPs) => onUpdateSelected({ periodPs })}
+              />
+
+              {selected.kind === "clock" && (
+                <>
+                  <ConvertibleTimeInput
+                    label="Clock phase"
+                    description="Same value, editable as time or angle"
+                    valuePs={selected.phasePs}
+                    referencePeriodPs={selected.periodPs}
+                    onChange={(phasePs) => onUpdateSelected({ phasePs })}
+                  />
+                  <div className="slider-field">
+                    <div className="slider-label">
+                      <span>Duty cycle</span>
+                      <strong>{Math.round(selected.dutyCycle * 100)}%</strong>
+                    </div>
+                    <Slider
+                      min={10}
+                      max={90}
+                      step={5}
+                      value={selected.dutyCycle * 100}
+                      label={(value) => `${value}%`}
+                      onChange={(value) =>
+                        onUpdateSelected({ dutyCycle: value / 100 })
+                      }
+                    />
+                  </div>
+                </>
+              )}
+            </section>
+          )}
+
+          {selected.kind === "data" && !isSequentialDataSignal(selected) && (
+            <section className="property-section pattern-section">
+              <div className="section-title">
+                <span>Pattern builder</span>
+                <span className="section-index">03</span>
+              </div>
+              <DataPatternEditor
+                key={selected.id}
+                pattern={selected.pattern}
+                segments={selected.patternSegments}
+                onChange={(
+                  pattern: string[],
+                  patternSegments: DataPatternSegment[],
+                ) => onUpdateSelected({ pattern, patternSegments })}
+              />
+            </section>
+          )}
+
+          {isSequentialDataSignal(selected) && (
+            <section className="property-section sequential-section">
+              <div className="section-title">
+                <span>Sequential logic</span>
+                <span className="section-index">02</span>
+              </div>
+              <SequentialSignalEditor
+                selected={selected}
+                signals={project.signals}
+                error={sequentialError}
+                onChange={(derivation) =>
+                  onUpdateSelected({ derivation } as Partial<Signal>)
+                }
+              />
+            </section>
+          )}
+
+          <section className="property-section linked-timing-section">
+            <div className="section-title">
+              <span>Signal timing</span>
+              <span className="section-index">04</span>
+            </div>
+            <SignalTimingEditor
+              durationPs={project.durationPs}
+              signals={project.signals}
+              selected={selected}
+              edgeTimes={edgeTimes}
+              delayLink={delayLink}
+              constraint={constraint}
+              onAddDelay={onAddDelay}
+              onChangeDelay={onChangeDelay}
+              onRemoveDelay={onRemoveDelay}
+              onAddConstraint={onAddConstraint}
+              onChangeConstraint={onChangeConstraint}
+              onRemoveConstraint={onRemoveConstraint}
+            />
+          </section>
+        </div>
+      )}
+    </aside>
+  );
+}

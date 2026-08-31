@@ -100,9 +100,9 @@ Chrona 是一个面向硬件设计工程师、验证工程师和系统工程师�
 
 ### 5.2 调整 Clock Phase 并展示影响
 
-用户拖动 Clock Edge 或修改 Phase。
+用户修改 Clock Phase，或调整附着于目标 Signal 的 Delay。
 
-系统实时更新 Waveform 和关联的 Delay / Setup/Hold 图形。
+系统实时更新 Waveform 和关联的 Delay / Setup/Hold 图形。周期生成波形的单个边沿不提供直接拖动；跨信号时间关系统一通过 Delay 表达，避免局部编辑破坏波形语义。
 
 ### 5.3 展示 Timing Constraint
 
@@ -136,7 +136,6 @@ PNG 和 PDF 导出属于后续版本。
 - Delay Links
 - Timing Constraints
 - Canvas Settings
-- View State
 
 #### 打开工程
 
@@ -174,11 +173,11 @@ V1 支持两种 Signal。
 - 删除 Signal
 - 拖拽调整 Signal 顺序
 
-#### Edge 操作
+#### Edge 表达
 
-- 点击选择 Edge
-- 查看 Edge 属性
-- 拖动 Edge 修改时间
+- Edge 由 Clock/Data 参数、Delay 与 Sequential Derivation 统一计算
+- 不直接拖动或局部修改单个 Edge
+- 跨信号边沿关系通过附着于目标 Signal 的 Delay 配置
 
 #### Canvas 操作
 
@@ -208,10 +207,12 @@ UI 时间输入支持：
 - Delay 不区分边沿极性，Clock 上升沿/下降沿与 Data transition 均按时间顺序统一编号
 - 每条关系的 Min / Current / Max Delay
 - 新建 Delay 默认 Min 0 ps、Current 10 ps、Max 20 ps
+- 每个目标 Signal 只允许一个 Delay Source，避免多个来源同时驱动整条目标波形而产生冲突
 - 每条 Delay 带可编辑的 Diagram Label，新建时自动按 `t1`、`t2` 等顺序命名
 - Current Delay 通过所选边沿锚点计算目标 Signal 的派生 Start offset，并平移整条目标波形
 - Target 可继续作为另一条关系的 Source，使多个 Signal Delay 按依赖传播
 - Setup/Hold 作为独立约束附着到目标 Signal，两侧均支持 Rising/Falling/All 类型与多个边沿编号
+- 每个目标 Signal 只维护一条 Setup/Hold Constraint；边沿编号可以多选，但 Reference Signal 保持单一来源
 - 新建 Setup/Hold 约束时两侧默认均为 10 ps
 - 每个 Reference edge 生成独立窗口；所选 Constrained edges 进入时，对应窗口整体显示浅色半透明红色反馈
 - Min/Max 虚线边界、Delay 测量线和 Window 随 SVG 导出
@@ -336,7 +337,7 @@ V1 在技术方案确定后补充可量化的帧率、Edge 数量和加载时间
 - Clock 创建与编辑
 - Data 创建与编辑
 - Waveform 渲染
-- Edge 选择与拖动
+- 由参数和 Delay 驱动的 Edge 计算与展示
 - Data Symbol Pattern Builder
 - Signal 拖拽排序
 - 固定在画布左侧的 Signal Label
@@ -349,9 +350,8 @@ V1 在技术方案确定后补充可量化的帧率、Edge 数量和加载时间
 ### 10.2 V1 增强项
 
 - Shortcut：Delete、Undo、Copy/Paste
-- Snap：Edge Snap、Clock Snap
 
-Shortcut 和 Snap 是否纳入首个 V1 发布里程碑，在开发排期时确认。
+Shortcut 是否纳入首个 V1 发布里程碑，在开发排期时确认。
 
 ### 10.3 V2 / P1：编辑能力增强
 
@@ -363,6 +363,7 @@ Shortcut 和 Snap 是否纳入首个 V1 发布里程碑，在开发排期时确�
 - PNG 导出
 - PDF 导出
 - 图片模板
+- 完整 View State 恢复，包括缩放、滚动位置、选中项与面板状态
 
 ## 11. V1 验收标准
 
@@ -376,7 +377,7 @@ V1 达到以下条件时视为可验收：
 6. 用户可以使用快捷 Token 或批量输入构建 `D0 D1 D2` Pattern。
 7. 相同 Data Token 在所有位置使用相同颜色，并始终显示名称。
 8. 用户可以拖拽 Signal Track Header 改变波形顺序，并复制 Signal。
-9. 用户可以保存工程，重新打开后 Signals 和 View State 正确恢复。
+9. 用户可以保存工程，重新打开后 Signals 与 Canvas Settings 正确恢复。
 10. 用户可以导出内容完整、可缩放的 SVG。
 11. 一个包含 100 个 Signal 的工程仍可完成基本编辑、缩放和滚动。
 12. Timing Engine 的单位换算与 Pattern 规则通过自动化测试。
@@ -412,7 +413,6 @@ V1 达到以下条件时视为可验收：
 - Delay 依赖形成环路时的阻止与解释方式
 - 很长的 Delay 链同时存在时的关系筛选与排版方式
 - 多个 Clock 存在时，`deg` 输入关联哪个 Clock
-- Edge 拖动对周期生成波形的影响：修改单个 Edge、调整 Phase，还是改变 Pattern
-- Undo/Redo 和 Snap 是否属于首个可发布版本
+- Undo/Redo 是否属于首个可发布版本
 - 100 Signal 场景对应的目标 Edge 数量及性能门槛
 - JSON 工程格式的初始 Schema 和版本迁移策略
