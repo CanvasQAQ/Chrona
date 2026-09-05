@@ -77,6 +77,7 @@ import {
   colorForDataToken,
   isSequentialDataSignal,
   resolveTimingConstraint,
+  type DelayRange,
   type EdgeDelayLink,
   type ClockSignal,
   type DataSignal,
@@ -204,6 +205,19 @@ function App() {
         (link) => link.targetSignalId === selected.id,
       )
     : undefined;
+  const derivedDelayCount = project.signals.reduce(
+    (count, signal) =>
+      isSequentialDataSignal(signal)
+        ? count +
+          1 +
+          (signal.derivation.device === "latch" && signal.derivation.d2q
+            ? 1
+            : 0)
+        : count,
+    0,
+  );
+  const consoleDelayCount =
+    (project.delayLinks?.length ?? 0) + derivedDelayCount;
   const selectedConstraint = selected
     ? (project.timingConstraints ?? []).find(
         (constraint) => constraint.targetSignalId === selected.id,
@@ -839,6 +853,32 @@ function App() {
   const updateSelectedDelay = (patch: Partial<EdgeDelayLink>) => {
     if (!selectedDelayLink) return;
     updateDelayForTarget(selectedDelayLink.targetSignalId, patch);
+  };
+
+  const updateDerivedDelay = (
+    signalId: string,
+    delayKind: "c2q" | "d2q",
+    range: DelayRange,
+  ) => {
+    const target = project.signals.find((signal) => signal.id === signalId);
+    setProject((current) => ({
+      ...current,
+      signals: current.signals.map((signal) => {
+        if (signal.id !== signalId || !isSequentialDataSignal(signal)) {
+          return signal;
+        }
+        return {
+          ...signal,
+          derivation: {
+            ...signal.derivation,
+            [delayKind]: range,
+          },
+        };
+      }),
+    }));
+    setStatusMessage(
+      `${target?.name ?? "Derived signal"} ${delayKind === "c2q" ? "C→Q" : "D→Q"} updated`,
+    );
   };
 
   const addSelectedConstraint = (sourceSignalId: string) => {
@@ -1567,8 +1607,7 @@ function App() {
                 }}
               >
                 Delays
-                {(project.delayLinks?.length ?? 0) > 0 &&
-                  ` · ${project.delayLinks?.length ?? 0}`}
+                {consoleDelayCount > 0 && ` · ${consoleDelayCount}`}
               </Button>
 
               <Menu shadow="md" width={180} position="bottom-end">
@@ -2247,6 +2286,7 @@ function App() {
               onToggleCollapsed={() =>
                 setDelayConsoleCollapsed((collapsed) => !collapsed)
               }
+              onUpdateDerivedDelay={updateDerivedDelay}
               onUpdateDelay={updateDelayForTarget}
               selectedSignalId={selected?.id ?? ""}
               signals={project.signals}

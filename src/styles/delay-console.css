@@ -67,6 +67,18 @@
   width: 150px;
 }
 
+.delay-console-filter {
+  flex: 0 0 auto;
+}
+
+.delay-console-filter .mantine-SegmentedControl-label {
+  min-height: 22px;
+  padding: 3px 8px;
+  color: var(--text-soft);
+  font-size: 8px;
+  font-weight: 650;
+}
+
 .delay-console-add {
   width: 158px;
 }
@@ -133,6 +145,11 @@
   background: color-mix(in srgb, var(--violet-soft) 50%, var(--panel-subtle));
 }
 
+.delay-control-strip.is-derived {
+  min-width: 830px;
+  background: color-mix(in srgb, var(--panel-subtle) 92%, var(--teal));
+}
+
 .delay-control-meta {
   min-width: 0;
   display: grid;
@@ -177,6 +194,89 @@
 
 .delay-control-label {
   min-width: 0;
+}
+
+.delay-control-derived-meta .mantine-Badge-root {
+  align-self: center;
+  justify-self: start;
+}
+
+.delay-control-route {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.delay-control-route span,
+.delay-control-route strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.delay-control-route strong {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.delay-control-kind {
+  align-self: center;
+  color: var(--text-faint);
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 7px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-align: right;
+}
+
+.delay-derived-controls {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(360px, 1fr);
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.delay-derived-controls.has-two {
+  grid-template-columns: repeat(2, minmax(360px, 1fr));
+}
+
+.delay-derived-channel {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.delay-derived-channel + .delay-derived-channel {
+  padding-left: 14px;
+  border-left: 1px solid var(--border);
+}
+
+.delay-derived-channel .mantine-Badge-root {
+  justify-self: start;
+}
+
+.delay-derived-channel .delay-control-current {
+  grid-template-columns: 78px minmax(140px, 1fr) 78px;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+
+.delay-derived-channel .delay-control-slider {
+  grid-template-columns: 70px minmax(90px, 1fr);
+  gap: 8px;
+}
+
+.delay-derived-channel .delay-control-bound {
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 4px;
 }
 
 .delay-control-current {
@@ -259,5 +359,9 @@
   .delay-console-title small,
   .delay-console-actions .mantine-TextInput-root {
     display: none;
+  }
+
+  .delay-console-filter .mantine-SegmentedControl-label {
+    padding-inline: 6px;
   }
 }
