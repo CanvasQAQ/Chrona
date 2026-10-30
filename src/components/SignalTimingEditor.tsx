@@ -17,6 +17,7 @@ import {
 } from "../domain/timing";
 
 interface SignalTimingEditorProps {
+  creation?: "delay" | "constraint";
   constraint?: TimingConstraint;
   delayLink?: EdgeDelayLink;
   durationPs: number;
@@ -88,6 +89,7 @@ function edgeOptions(
 }
 
 export function SignalTimingEditor({
+  creation,
   constraint,
   delayLink,
   durationPs,
@@ -235,7 +237,7 @@ export function SignalTimingEditor({
           label={(value) => `${Math.round(value)} ps`}
           onChange={(currentPs) => onChangeDelay({ currentPs })}
         />
-        <Button
+        {!creation && <Button
           fullWidth
           variant="subtle"
           color="red"
@@ -244,7 +246,7 @@ export function SignalTimingEditor({
           onClick={onRemoveDelay}
         >
           Remove delay
-        </Button>
+        </Button>}
       </div>
     );
   };
@@ -389,7 +391,7 @@ export function SignalTimingEditor({
             }
           />
         </div>
-        <Button
+        {!creation && <Button
           fullWidth
           variant="subtle"
           color="red"
@@ -398,21 +400,21 @@ export function SignalTimingEditor({
           onClick={onRemoveConstraint}
         >
           Remove constraint
-        </Button>
+        </Button>}
       </div>
     );
   };
 
   return (
     <div className="signal-timing-editor">
-      <div className="signal-timing-block">
+      {creation !== "constraint" && <div className="signal-timing-block">
         <div className="signal-timing-title">Source delay</div>
         {renderDelay()}
-      </div>
-      <div className="signal-timing-block">
+      </div>}
+      {creation !== "delay" && <div className="signal-timing-block">
         <div className="signal-timing-title">Setup / hold constraint</div>
         {renderConstraint()}
-      </div>
+      </div>}
     </div>
   );
 }

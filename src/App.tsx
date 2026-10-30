@@ -2,6 +2,7 @@ import {
   ActionIcon,
   Button,
   Menu,
+  Modal,
   NumberInput,
   Popover,
   Select,
@@ -10,6 +11,7 @@ import {
   TextInput,
   Tooltip,
   UnstyledButton,
+  useComputedColorScheme,
 } from "@mantine/core";
 import {
   Check,
@@ -25,6 +27,7 @@ import {
   Grid2X2,
   GitBranch,
   Layers3,
+  PanelRightOpen,
   RotateCcw,
   ScanLine,
   Search,
@@ -45,6 +48,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { SignalTimingEditor } from "./components/SignalTimingEditor";
 import { PropertyPanel } from "./features/inspector/PropertyPanel";
 import { DelayConsole } from "./features/delay-console/DelayConsole";
 import {
@@ -78,6 +82,8 @@ import {
   isSequentialDataSignal,
   resolveTimingConstraint,
   type DelayRange,
+  type DataLabelColor,
+  type DataLabelSize,
   type EdgeDelayLink,
   type ClockSignal,
   type DataSignal,
@@ -85,6 +91,7 @@ import {
   type SignalGroup,
   type TimingProject,
   type TimingConstraint,
+  WAVEFORM_PALETTES,
 } from "./domain/timing";
 import {
   latchTransparentIntervals,
@@ -92,13 +99,24 @@ import {
   segmentsForResolvedWaveform,
 } from "./domain/sequential";
 
-const SIGNAL_COLORS = ["#8b7cff", "#35d6b4", "#ffb45c", "#4db7ff", "#f277a8"];
 const DEFAULT_CANVAS_SETTINGS = {
   showVerticalGrid: true,
   gridMode: "auto" as const,
   gridIntervalPs: 250,
   trackHeight: MIN_TRACK_HEIGHT,
+  waveformPalette: "contrast24" as const,
+  clockColorMode: "multi" as const,
+  clockColorIndex: 0,
+  dataLabelSize: "large" as const,
+  dataLabelColor: "token" as const,
+  waveformGlow: false,
 };
+
+const PALETTE_CHOICES = [
+  { value: "contrast24", label: "Clarity" },
+  { value: "vivid", label: "Vivid" },
+  { value: "monochrome", label: "Black & white" },
+] as const;
 
 const initialProject: TimingProject = {
   version: 3,
@@ -137,7 +155,12 @@ interface ExportRange {
 
 
 function App() {
+  const colorScheme = useComputedColorScheme("light");
   const [project, setProject] = useState<TimingProject>(initialProject);
+  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [signalDraft, setSignalDraft] = useState<Signal | null>(null);
+  const [delayDraft, setDelayDraft] = useState<EdgeDelayLink | null>(null);
+  const [constraintDraft, setConstraintDraft] = useState<TimingConstraint | null>(null);
   const [selectedId, setSelectedId] = useState("");
   const [zoom, setZoom] = useState(1);
   const [labelWidth, setLabelWidth] = useState(DEFAULT_LABEL_WIDTH);
@@ -235,6 +258,83 @@ function App() {
   const resolvedSequentialSignals = resolvedProjectTiming;
   const referencePeriodPs = referenceClock?.periodPs ?? 1000;
   const canvasSettings = project.canvasSettings ?? DEFAULT_CANVAS_SETTINGS;
+  const waveformPalette = canvasSettings.waveformPalette ?? "contrast24";
+  const dataLabelSize = canvasSettings.dataLabelSize ?? "large";
+  const dataLabelColor = canvasSettings.dataLabelColor ?? "token";
+  const waveformGlow = canvasSettings.waveformGlow ?? false;
+  const clockColorMode = canvasSettings.clockColorMode === "single" ? "single" : "multi";
+  const monochrome = waveformPalette === "monochrome";
+  const contrastPalette = waveformPalette === "contrast16" || waveformPalette === "contrast24";
+  const palette = WAVEFORM_PALETTES[waveformPalette];
+  const displaySignalColors = colorScheme === "dark"
+    ? palette.darkSignal ?? palette.signal
+    : palette.signal;
+  const displayTokenColors = colorScheme === "dark"
+    ? palette.darkToken ?? palette.token
+    : palette.token;
+  const clockColorIndex = Number.isFinite(canvasSettings.clockColorIndex)
+    ? Math.max(0, Math.floor(canvasSettings.clockColorIndex ?? 0)) % displaySignalColors.length
+    : 0;
+  const singleClockColor = displaySignalColors[clockColorIndex];
+  const dataTokenColors = useMemo(() => {
+    const assigned = new Map<string, string>();
+    if (!contrastPalette) return assigned;
+    const order: string[] = [];
+    const neighbors = new Map<string, Set<string>>();
+
+    for (const signal of project.signals) {
+      if (signal.kind !== "data") continue;
+      const resolvedWaveform = resolvedSequentialSignals.bySignalId[signal.id];
+      const segments = isSequentialDataSignal(signal) && resolvedWaveform
+        ? segmentsForResolvedWaveform(resolvedWaveform, project.durationPs)
+        : buildDataSegments(signal, project.durationPs);
+      let previousToken: string | undefined;
+      for (const segment of segments) {
+        const token = segment.token.trim().toUpperCase();
+        if (["0", "1", "X", "Z"].includes(token)) {
+          previousToken = undefined;
+          continue;
+        }
+        if (!neighbors.has(token)) {
+          neighbors.set(token, new Set());
+          order.push(token);
+        }
+        if (previousToken && previousToken !== token) {
+          neighbors.get(token)?.add(previousToken);
+          neighbors.get(previousToken)?.add(token);
+        }
+        previousToken = token;
+      }
+    }
+
+    for (const token of order) {
+      const preferred = assigned.size % displayTokenColors.length;
+      const usedByNeighbors = new Set(
+        [...(neighbors.get(token) ?? [])].map((neighbor) => assigned.get(neighbor)),
+      );
+      let color = displayTokenColors[preferred];
+      for (let offset = 0; offset < displayTokenColors.length; offset += 1) {
+        const candidate = displayTokenColors[(preferred + offset) % displayTokenColors.length];
+        if (!usedByNeighbors.has(candidate)) {
+          color = candidate;
+          break;
+        }
+      }
+      assigned.set(token, color);
+    }
+    return assigned;
+  }, [contrastPalette, displayTokenColors, project.durationPs, project.signals, resolvedSequentialSignals]);
+  const dataLabelFontSize = {
+    small: 8,
+    medium: 10,
+    large: 12,
+  }[dataLabelSize];
+  const dataLabelFill = (tokenColor: string) => {
+    if (monochrome) return colorScheme === "dark" ? "#ffffff" : "#111111";
+    if (dataLabelColor === "contrast") return "var(--text)";
+    if (dataLabelColor === "muted") return "var(--text-soft)";
+    return tokenColor;
+  };
   const trackHeight = Math.min(
     MAX_TRACK_HEIGHT,
     Math.max(MIN_TRACK_HEIGHT, canvasSettings.trackHeight),
@@ -707,7 +807,7 @@ function App() {
           : `DATA ${project.signals.length}`,
       startPs: 0,
       visible: true,
-      color: SIGNAL_COLORS[project.signals.length % SIGNAL_COLORS.length],
+      color: palette.signal[project.signals.length % palette.signal.length],
     };
     const signal: Signal =
       kind === "clock"
@@ -725,12 +825,7 @@ function App() {
             pattern: ["D0", "D1", "D2"],
           };
 
-    setProject((current) => ({
-      ...current,
-      signals: [...current.signals, signal],
-    }));
-    setSelectedId(id);
-    setStatusMessage(`${signal.name} added`);
+    setSignalDraft(signal);
   };
 
   const addDerivedSignal = () => {
@@ -764,7 +859,7 @@ function App() {
       periodPs: clock.periodPs,
       pattern: ["X"],
       visible: true,
-      color: SIGNAL_COLORS[project.signals.length % SIGNAL_COLORS.length],
+      color: palette.signal[project.signals.length % palette.signal.length],
       derivation: {
         device: "latch",
         clockSignalId: clock.id,
@@ -775,13 +870,7 @@ function App() {
         initialValue: "X",
       },
     };
-    setProject((current) => ({
-      ...current,
-      version: 3,
-      signals: [...current.signals, signal],
-    }));
-    setSelectedId(id);
-    setStatusMessage(`${name} derived from ${clock.name} and ${data.name}`);
+    setSignalDraft(signal);
   };
 
   const addDelayForTarget = (
@@ -790,35 +879,15 @@ function App() {
   ) => {
     const target = project.signals.find((signal) => signal.id === targetSignalId);
     if (!target || targetSignalId === sourceSignalId) return;
-    setProject((current) => {
-      const existing = (current.delayLinks ?? []).filter(
-        (link) => link.targetSignalId !== targetSignalId,
-      );
-      const usedLabels = new Set(
-        existing.map((link) => link.label?.trim()).filter(Boolean),
-      );
-      let labelIndex = existing.length + 1;
-      while (usedLabels.has(`t${labelIndex}`)) labelIndex += 1;
-      return {
-        ...current,
-        delayLinks: [
-          ...existing,
-          {
-            id: crypto.randomUUID(),
-            label: `t${labelIndex}`,
-            sourceSignalId,
-            targetSignalId,
-            sourceEdge: 1,
-            targetEdge: 1,
-            minPs: 0,
-            currentPs: 10,
-            maxPs: 20,
-          },
-        ],
-      };
+    const existing = project.delayLinks ?? [];
+    const usedLabels = new Set(existing.map((link) => link.label?.trim()));
+    let labelIndex = existing.length + 1;
+    while (usedLabels.has(`t${labelIndex}`)) labelIndex += 1;
+    setDelayDraft({
+      id: crypto.randomUUID(), label: `t${labelIndex}`,
+      sourceSignalId, targetSignalId, sourceEdge: 1, targetEdge: 1,
+      minPs: 0, currentPs: 10, maxPs: 20,
     });
-    setSelectedId(targetSignalId);
-    setStatusMessage(`${target.name} source delay added`);
   };
 
   const addSelectedDelay = (sourceSignalId: string) => {
@@ -900,16 +969,7 @@ function App() {
       setupPs: project.constraintDraft.setupPs,
       holdPs: project.constraintDraft.holdPs,
     };
-    setProject((current) => ({
-      ...current,
-      timingConstraints: [
-        ...(current.timingConstraints ?? []).filter(
-          (item) => item.targetSignalId !== selected.id,
-        ),
-        constraint,
-      ],
-    }));
-    setStatusMessage(`${selected.name} constraint added`);
+    setConstraintDraft(constraint);
   };
 
   const updateSelectedConstraint = (patch: Partial<TimingConstraint>) => {
@@ -1079,6 +1139,9 @@ function App() {
       range,
       project.durationPs,
       outputTimelineWidth,
+      dataLabelColor,
+      waveformPalette,
+      colorScheme === "dark",
     );
     downloadTextFile(
       `${project.name.toLowerCase().replace(/\s+/g, "-")}.svg`,
@@ -1207,7 +1270,11 @@ function App() {
                   >
                     <span
                       className="signal-color-dot"
-                      style={{ backgroundColor: signal.color }}
+                      style={{
+                        backgroundColor: signal.kind === "clock" && clockColorMode === "single"
+                          ? singleClockColor
+                          : signal.color,
+                      }}
                     />
                     <span>{signal.name}</span>
                   </UnstyledButton>
@@ -1431,6 +1498,34 @@ function App() {
     });
   };
 
+  const timingDraft = delayDraft ?? constraintDraft;
+  const draftTarget = project.signals.find((signal) => signal.id === timingDraft?.targetSignalId);
+  const closeCreation = () => {
+    setSignalDraft(null);
+    setDelayDraft(null);
+    setConstraintDraft(null);
+  };
+  const confirmCreation = () => {
+    if (signalDraft) {
+      if (!signalDraft.name.trim()) return;
+      const signal = { ...signalDraft, name: signalDraft.name.trim() };
+      setProject((current) => ({ ...current, version: 3, signals: [...current.signals, signal] }));
+      setSelectedId(signal.id);
+      setStatusMessage(`${signal.name} added`);
+    } else if (timingDraft && draftTarget) {
+      setProject((current) => delayDraft ? {
+        ...current,
+        delayLinks: [...(current.delayLinks ?? []).filter((link) => link.targetSignalId !== delayDraft.targetSignalId), delayDraft],
+      } : {
+        ...current,
+        timingConstraints: [...(current.timingConstraints ?? []).filter((item) => item.targetSignalId !== constraintDraft!.targetSignalId), constraintDraft!],
+      });
+      setSelectedId(draftTarget.id);
+      setStatusMessage(`${draftTarget.name} ${delayDraft ? "source delay" : "constraint"} added`);
+    }
+    closeCreation();
+  };
+
   return (
     <div className="app-shell" data-platform={desktopPlatform}>
       <ProjectHeader
@@ -1450,7 +1545,31 @@ function App() {
         onSaveProject={saveProject}
       />
 
-      <div className="workspace">
+      <Modal opened={Boolean(signalDraft || timingDraft)} onClose={closeCreation}
+        title={signalDraft ? `Add ${isSequentialDataSignal(signalDraft) ? "derived" : signalDraft.kind} signal` : delayDraft ? "Add source delay" : "Add timing constraint"}
+        centered size="lg" className="creation-modal" closeOnClickOutside={false}
+        closeButtonProps={{ "aria-label": "Cancel creation" }} transitionProps={{ transition: "fade", exitDuration: 0 }}>
+        <p className="creation-description">{signalDraft ? "Configure your signal, then click Add to draw it on the canvas." : `Configure timing for ${draftTarget?.name ?? "signal"}, then click Add to apply it.`}</p>
+        {signalDraft && <PropertyPanel creation project={project} selected={signalDraft}
+          referenceClock={referenceClock} referencePeriodPs={referencePeriodPs}
+          edgeTimes={(signal, polarity) => resolvedProjectTiming.edgeTimes(signal.id, polarity)}
+          onUpdateSelected={(patch) => setSignalDraft((draft) => draft ? { ...draft, ...patch } as Signal : draft)}
+          onAddDelay={() => {}} onAddConstraint={() => {}} onChangeDelay={() => {}}
+          onChangeConstraint={() => {}} onRemoveDelay={() => {}} onRemoveConstraint={() => {}} />}
+        {timingDraft && draftTarget && <SignalTimingEditor creation={delayDraft ? "delay" : "constraint"}
+          selected={draftTarget} signals={project.signals} durationPs={project.durationPs}
+          edgeTimes={(signal, polarity) => resolvedProjectTiming.edgeTimes(signal.id, polarity)}
+          delayLink={delayDraft ?? undefined} constraint={constraintDraft ?? undefined}
+          onChangeDelay={(patch) => setDelayDraft((draft) => draft ? { ...draft, ...patch } : draft)}
+          onChangeConstraint={(patch) => setConstraintDraft((draft) => draft ? { ...draft, ...patch } : draft)}
+          onAddDelay={() => {}} onAddConstraint={() => {}} onRemoveDelay={() => {}} onRemoveConstraint={() => {}} />}
+        {signalDraft && !signalDraft.name.trim() && <p role="alert" className="sequential-error">Enter a signal name.</p>}
+        <div className="creation-actions">
+          <Button variant="default" onClick={closeCreation}>Cancel</Button>
+          <Button disabled={signalDraft ? !signalDraft.name.trim() : !draftTarget} onClick={confirmCreation}>Add</Button>
+        </div>
+      </Modal>
+      <div className={`workspace${inspectorOpen ? "" : " inspector-collapsed"}`}>
         <main
           className="editor"
           data-delay-console={
@@ -1658,7 +1777,7 @@ function App() {
                   <RotateCcw size={16} />
                 </ActionIcon>
               </Tooltip>
-              <Popover width={252} position="bottom-end" shadow="md" withArrow>
+              <Popover width={300} position="bottom-end" shadow="md" withArrow>
                 <Popover.Target>
                   <ActionIcon
                     variant="subtle"
@@ -1669,6 +1788,154 @@ function App() {
                   </ActionIcon>
                 </Popover.Target>
                 <Popover.Dropdown className="grid-settings-panel">
+                  <div className="waveform-style-settings">
+                    <strong>Waveform appearance</strong>
+                    <div className="palette-options" role="radiogroup" aria-label="Waveform palette">
+                      {PALETTE_CHOICES.map(({ value, label }) => (
+                        <UnstyledButton
+                          key={value}
+                          className="palette-option"
+                          data-active={waveformPalette === value || undefined}
+                          role="radio"
+                          aria-checked={waveformPalette === value}
+                          onClick={() =>
+                            setProject((current) => {
+                              const nextPalette = WAVEFORM_PALETTES[value].signal;
+                              return {
+                                ...current,
+                                signals: current.signals.map((signal, index) => ({
+                                  ...signal,
+                                  color: nextPalette[index % nextPalette.length],
+                                })),
+                                canvasSettings: {
+                                  ...(current.canvasSettings ?? DEFAULT_CANVAS_SETTINGS),
+                                  waveformPalette: value,
+                                },
+                              };
+                            })
+                          }
+                        >
+                          <span className="palette-option-label">{label}</span>
+                          <span className="palette-swatches" aria-hidden="true">
+                            {(value === "monochrome"
+                              ? ["#111111", "#ffffff"]
+                              : colorScheme === "dark"
+                              ? WAVEFORM_PALETTES[value].darkSignal ?? WAVEFORM_PALETTES[value].signal
+                              : WAVEFORM_PALETTES[value].signal).slice(0, 6).map((color, index) => (
+                              <i key={`${index}-${color}`} style={{ backgroundColor: color }} />
+                            ))}
+                          </span>
+                        </UnstyledButton>
+                      ))}
+                    </div>
+                    <div className="clock-color-settings">
+                      <div className="grid-settings-heading">
+                        <span>CLK colors</span>
+                        <SegmentedControl
+                          size="xs"
+                          aria-label="Clock color mode"
+                          value={clockColorMode}
+                          disabled={monochrome}
+                          data={[
+                            { label: "Single", value: "single" },
+                            { label: "Multi", value: "multi" },
+                          ]}
+                          onChange={(clockColorMode) =>
+                            setProject((current) => ({
+                              ...current,
+                              canvasSettings: {
+                                ...(current.canvasSettings ?? DEFAULT_CANVAS_SETTINGS),
+                                clockColorMode: clockColorMode as "single" | "multi",
+                              },
+                            }))
+                          }
+                        />
+                      </div>
+                      {clockColorMode === "single" && !monochrome && (
+                        <div className="clock-color-swatches" role="radiogroup" aria-label="Single CLK color">
+                          {displaySignalColors.map((color, index) => (
+                            <UnstyledButton
+                              key={`${index}-${color}`}
+                              role="radio"
+                              aria-label={`Clock color ${index + 1}`}
+                              aria-checked={clockColorIndex === index}
+                              data-active={clockColorIndex === index || undefined}
+                              title={color}
+                              style={{ backgroundColor: color }}
+                              onClick={() =>
+                                setProject((current) => ({
+                                  ...current,
+                                  canvasSettings: {
+                                    ...(current.canvasSettings ?? DEFAULT_CANVAS_SETTINGS),
+                                    clockColorIndex: index,
+                                  },
+                                }))
+                              }
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="grid-settings-heading">
+                      <span>Waveform glow</span>
+                      <Switch
+                        aria-label="Waveform glow"
+                        size="xs"
+                        checked={waveformGlow}
+                        disabled={monochrome}
+                        onChange={(event) => {
+                          const checked = event.currentTarget.checked;
+                          setProject((current) => ({
+                            ...current,
+                            canvasSettings: {
+                              ...(current.canvasSettings ?? DEFAULT_CANVAS_SETTINGS),
+                              waveformGlow: checked,
+                            },
+                          }));
+                        }}
+                      />
+                    </div>
+                    <SegmentedControl
+                      fullWidth
+                      size="xs"
+                      aria-label="Data label size"
+                      value={dataLabelSize}
+                      data={[
+                        { label: "Small", value: "small" },
+                        { label: "Medium", value: "medium" },
+                        { label: "Large", value: "large" },
+                      ]}
+                      onChange={(dataLabelSize) =>
+                        setProject((current) => ({
+                          ...current,
+                          canvasSettings: {
+                            ...(current.canvasSettings ?? DEFAULT_CANVAS_SETTINGS),
+                            dataLabelSize: dataLabelSize as DataLabelSize,
+                          },
+                        }))
+                      }
+                    />
+                    <Select
+                      label="Data label color"
+                      value={dataLabelColor}
+                      allowDeselect={false}
+                      data={[
+                        { label: "Match data color", value: "token" },
+                        { label: "High contrast", value: "contrast" },
+                        { label: "Muted", value: "muted" },
+                      ]}
+                      onChange={(dataLabelColor) =>
+                        dataLabelColor &&
+                        setProject((current) => ({
+                          ...current,
+                          canvasSettings: {
+                            ...(current.canvasSettings ?? DEFAULT_CANVAS_SETTINGS),
+                            dataLabelColor: dataLabelColor as DataLabelColor,
+                          },
+                        }))
+                      }
+                    />
+                  </div>
                   <div className="canvas-layout-settings">
                     <strong>Track layout</strong>
                     <NumberInput
@@ -1751,6 +2018,7 @@ function App() {
           <div
             ref={canvasViewportRef}
             className="canvas-viewport"
+            data-palette={waveformPalette}
             role="region"
             aria-label="Timing canvas viewport"
           >
@@ -1801,7 +2069,10 @@ function App() {
                     <UnstyledButton
                       className="track-select"
                       aria-pressed={signal.id === selectedId}
-                      onClick={() => setSelectedId(signal.id)}
+                      onClick={() => {
+                        setSelectedId(signal.id);
+                        setInspectorOpen(true);
+                      }}
                       onKeyDown={(event) => {
                         if (event.altKey && event.key === "ArrowUp") {
                           event.preventDefault();
@@ -1918,8 +2189,10 @@ function App() {
 
               <svg
                 ref={svgRef}
+                data-palette={waveformPalette}
                 className={[
                   "timing-canvas",
+                  waveformGlow && !monochrome ? "has-glow" : "",
                   isCanvasPanning ? "is-panning" : "",
                   axisSelection ? "is-selecting" : "",
                 ]
@@ -2011,7 +2284,17 @@ function App() {
                 {renderSequentialGuides()}
 
                 {trackLayouts.map(({ height, signal, y }) => {
-                  const renderedSignal = signalWithLinkedStart(signal);
+                  const signalIndex = project.signals.findIndex(
+                    (projectSignal) => projectSignal.id === signal.id,
+                  );
+                  const renderedSignal = {
+                    ...signalWithLinkedStart(signal),
+                    color: signal.kind === "clock" && clockColorMode === "single"
+                      ? singleClockColor
+                      : displaySignalColors[
+                        Math.max(0, signalIndex) % displaySignalColors.length
+                      ],
+                  } as Signal;
                   const renderedStartPs = Math.min(
                     project.durationPs,
                     Math.max(
@@ -2090,7 +2373,12 @@ function App() {
                           />
                         </>
                       ) : (
-                        <g className="data-symbols">
+                        <g
+                          className="data-symbols"
+                          style={
+                            { "--signal-color": renderedSignal.color } as CSSProperties
+                          }
+                        >
                           {(() => {
                             const resolvedWaveform =
                               resolvedSequentialSignals.bySignalId[renderedSignal.id];
@@ -2112,8 +2400,12 @@ function App() {
                                 height * 0.22,
                               );
                               const notch = Math.min(7, (x2 - x1) / 4);
-                              const color = colorForDataToken(segment.token);
-                              const token = segment.token.toUpperCase();
+                              const token = segment.token.trim().toUpperCase();
+                              const color = dataTokenColors.get(token) ?? colorForDataToken(
+                                segment.token,
+                                waveformPalette,
+                                colorScheme === "dark",
+                              );
                               const previousToken =
                                 segments[segmentIndex - 1]?.token.toUpperCase();
                               const nextToken =
@@ -2199,6 +2491,10 @@ function App() {
                                         y={centerY + 4}
                                         textAnchor="middle"
                                         className="data-state-label"
+                                        style={{
+                                          fontSize: dataLabelFontSize,
+                                          fill: dataLabelFill(color),
+                                        }}
                                       >
                                         X
                                       </text>
@@ -2223,6 +2519,10 @@ function App() {
                                         y={centerY - 6}
                                         textAnchor="middle"
                                         className="data-state-label"
+                                        style={{
+                                          fontSize: dataLabelFontSize,
+                                          fill: dataLabelFill(color),
+                                        }}
                                       >
                                         Z
                                       </text>
@@ -2254,6 +2554,10 @@ function App() {
                                       y={centerY + 4}
                                       textAnchor="middle"
                                       className="data-symbol-label"
+                                      style={{
+                                        fontSize: dataLabelFontSize,
+                                        fill: dataLabelFill(color),
+                                      }}
                                     >
                                       {segment.token}
                                     </text>
@@ -2305,7 +2609,19 @@ function App() {
           </div>
         </main>
 
-        <PropertyPanel
+        {!inspectorOpen && (
+          <aside className="inspector-rail" aria-label="Collapsed properties">
+            <Tooltip label="Show properties" position="left">
+              <UnstyledButton className="inspector-rail-toggle" aria-label="Show properties"
+                aria-expanded={false} onClick={() => setInspectorOpen(true)}>
+                <PanelRightOpen size={18} />
+                <span>Properties</span>
+              </UnstyledButton>
+            </Tooltip>
+          </aside>
+        )}
+        {inspectorOpen && <PropertyPanel
+          onCollapse={() => setInspectorOpen(false)}
           project={project}
           selected={selected}
           referenceClock={referenceClock}
@@ -2336,7 +2652,7 @@ function App() {
             }));
             setStatusMessage(`${selected.name} constraint removed`);
           }}
-        />
+        />}
       </div>
     </div>
   );

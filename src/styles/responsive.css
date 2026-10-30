@@ -3,8 +3,13 @@
     grid-template-columns: minmax(440px, 1fr);
   }
 
-  .property-panel {
-    display: none;
+  .workspace > .property-panel {
+    position: absolute;
+    inset: 0 0 0 auto;
+    width: 344px;
+    z-index: 10;
+    border-left: 1px solid var(--border);
+    box-shadow: -8px 0 24px rgb(0 0 0 / 12%);
   }
 }
 
@@ -23,4 +28,12 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
+}
+
+.workspace {
+  position: relative;
+}
+
+.workspace.inspector-collapsed {
+  grid-template-columns: minmax(0, 1fr) 40px;
 }

@@ -107,7 +107,28 @@ export interface CanvasSettings {
   gridMode: "auto" | "custom";
   gridIntervalPs: number;
   trackHeight: number;
+  waveformPalette?: WaveformPalette;
+  clockColorMode?: "single" | "multi";
+  clockColorIndex?: number;
+  dataLabelSize?: DataLabelSize;
+  dataLabelColor?: DataLabelColor;
+  waveformGlow?: boolean;
 }
+
+export type WaveformPalette =
+  | "contrast16"
+  | "contrast24"
+  | "vivid"
+  | "classic"
+  | "colorblind"
+  | "document"
+  | "research"
+  | "coastal"
+  | "mineral"
+  | "graphite"
+  | "monochrome";
+export type DataLabelSize = "small" | "medium" | "large";
+export type DataLabelColor = "token" | "contrast" | "muted";
 
 export interface TimingConstraint {
   id: string;
@@ -211,6 +232,107 @@ export const DATA_TOKEN_COLORS = [
   "#f47d62",
   "#52c7d9",
 ] as const;
+
+const CONTRAST_16 = [
+  "#2563EB", "#D97706", "#059669", "#DC2626",
+  "#7C3AED", "#0F766E", "#C2410C", "#1D4ED8",
+  "#BE185D", "#4D7C0F", "#0891B2", "#9333EA",
+  "#B45309", "#15803D", "#E11D48", "#334155",
+] as const;
+
+const CONTRAST_24 = [
+  ...CONTRAST_16,
+  "#0369A1", "#CA8A04", "#0D9488", "#A21CAF",
+  "#EA580C", "#166534", "#4338CA", "#B91C1C",
+] as const;
+
+const CONTRAST_24_DARK = [
+  "#7EA8FF", "#F4AE59", "#47D7A6", "#FF7777",
+  "#B99BFF", "#58D2BF", "#F49B70", "#89A9FF",
+  "#F27CAC", "#B9D46F", "#58C8E4", "#D09BFF",
+  "#E8B66C", "#67D38B", "#FF749B", "#ADBED0",
+  "#62BCEB", "#E2C45D", "#5ED6C7", "#DF8AE8",
+  "#FF985D", "#82C77C", "#A6A0FF", "#F28282",
+] as const;
+
+const VIVID_24 = [
+  "#6741F2", "#00A67D", "#E26700", "#087DD1",
+  "#D63384", "#7A5AF8", "#00A6B8", "#D82B32",
+  "#9A5B00", "#17A34A", "#4338CA", "#DF2E8A",
+  "#B45309", "#008F75", "#9638E2", "#E11D48",
+  "#0B91B7", "#71A500", "#C51658", "#2563EB",
+  "#C64A1C", "#0BA59A", "#B623C7", "#4F46E5",
+] as const;
+
+const VIVID_24_DARK = [
+  "#AA91FF", "#3FE2BA", "#FFAB66", "#62B9FF",
+  "#FF78B9", "#B4A0FF", "#4BD9E8", "#FF777D",
+  "#E5B057", "#62DB83", "#9A91FF", "#FF8BC7",
+  "#F3BD67", "#48D5BA", "#CE91FF", "#FF728F",
+  "#65D0F1", "#B3D85C", "#F782AD", "#82ABFF",
+  "#FF946D", "#5AE0D1", "#E08CEA", "#A6A2FF",
+] as const;
+
+export const WAVEFORM_PALETTES: Record<
+  WaveformPalette,
+  {
+    signal: readonly string[];
+    token: readonly string[];
+    darkSignal?: readonly string[];
+    darkToken?: readonly string[];
+  }
+> = {
+  contrast16: { signal: CONTRAST_16, token: CONTRAST_16, darkSignal: CONTRAST_24_DARK.slice(0, 16), darkToken: CONTRAST_24_DARK.slice(0, 16) },
+  contrast24: { signal: CONTRAST_24, token: CONTRAST_24, darkSignal: CONTRAST_24_DARK, darkToken: CONTRAST_24_DARK },
+  vivid: {
+    signal: VIVID_24,
+    token: VIVID_24,
+    darkSignal: VIVID_24_DARK,
+    darkToken: VIVID_24_DARK,
+  },
+  classic: {
+    signal: ["#8b7cff", "#35d6b4", "#ffb45c", "#4db7ff", "#f277a8"],
+    token: DATA_TOKEN_COLORS,
+  },
+  colorblind: {
+    signal: ["#0072b2", "#e69f00", "#009e73", "#cc79a7", "#56b4e9", "#d55e00"],
+    token: ["#0072b2", "#e69f00", "#009e73", "#cc79a7", "#56b4e9", "#d55e00", "#f0e442", "#332288"],
+  },
+  document: {
+    signal: ["#475569", "#2563eb", "#0f766e", "#64748b", "#6d5b8c", "#9a6a35"],
+    token: ["#475569", "#2563eb", "#0f766e", "#64748b", "#6d5b8c", "#9a6a35", "#334155", "#155e75"],
+  },
+  research: {
+    signal: ["#234c70", "#ad5b31", "#287868", "#76588a", "#555f70", "#a16c29"],
+    token: ["#234c70", "#ad5b31", "#287868", "#76588a", "#555f70", "#a16c29", "#315f83", "#80514d"],
+    darkSignal: ["#8bbde0", "#e6a17e", "#7ed2ba", "#baa1d0", "#adb9ca", "#dfb574"],
+    darkToken: ["#8bbde0", "#e6a17e", "#7ed2ba", "#baa1d0", "#adb9ca", "#dfb574", "#91c7e6", "#d29a94"],
+  },
+  coastal: {
+    signal: ["#1d4e68", "#087d84", "#b5654d", "#517396", "#6f677f", "#b18b40"],
+    token: ["#1d4e68", "#087d84", "#b5654d", "#517396", "#6f677f", "#b18b40", "#377b8b", "#8d5972"],
+    darkSignal: ["#82b8d1", "#75cbd1", "#e3a18d", "#9abadd", "#b9aeca", "#e5c888"],
+    darkToken: ["#82b8d1", "#75cbd1", "#e3a18d", "#9abadd", "#b9aeca", "#e5c888", "#8cc8d2", "#d4a3bc"],
+  },
+  mineral: {
+    signal: ["#5b4d70", "#9b6136", "#44746a", "#4c6680", "#8b5b68", "#716741"],
+    token: ["#5b4d70", "#9b6136", "#44746a", "#4c6680", "#8b5b68", "#716741", "#366978", "#82664f"],
+    darkSignal: ["#baa8d0", "#dfaa7f", "#91c9b9", "#a0bdd5", "#d5a6b1", "#c9be85"],
+    darkToken: ["#baa8d0", "#dfaa7f", "#91c9b9", "#a0bdd5", "#d5a6b1", "#c9be85", "#90c7d0", "#cfb294"],
+  },
+  graphite: {
+    signal: ["#333b47", "#526b82", "#77736c", "#3e6b70", "#675e78", "#8a6f56"],
+    token: ["#333b47", "#526b82", "#77736c", "#3e6b70", "#675e78", "#8a6f56", "#4f6173", "#646d64"],
+    darkSignal: ["#d5dce4", "#a8bfd1", "#bcb9b2", "#9bc3c5", "#b9afc8", "#ceb79f"],
+    darkToken: ["#d5dce4", "#a8bfd1", "#bcb9b2", "#9bc3c5", "#b9afc8", "#ceb79f", "#b0bdcc", "#b4c0b3"],
+  },
+  monochrome: {
+    signal: ["#111111"],
+    token: ["#111111"],
+    darkSignal: ["#ffffff"],
+    darkToken: ["#ffffff"],
+  },
+};
 
 export function clampDuration(value: number): number {
   if (!Number.isFinite(value)) return MIN_DURATION_PS;
@@ -346,14 +468,20 @@ export function patternForDataSignal(signal: DataSignal): string[] {
     : normalizeDataPattern(signal.pattern);
 }
 
-export function colorForDataToken(token: string): string {
+export function colorForDataToken(
+  token: string,
+  palette: WaveformPalette = "classic",
+  dark = false,
+): string {
   const normalized = token.trim().toUpperCase();
   let hash = 2166136261;
   for (let index = 0; index < normalized.length; index += 1) {
     hash ^= normalized.charCodeAt(index);
     hash = Math.imul(hash, 16777619);
   }
-  return DATA_TOKEN_COLORS[Math.abs(hash) % DATA_TOKEN_COLORS.length];
+  const selectedPalette = WAVEFORM_PALETTES[palette];
+  const colors = dark ? selectedPalette.darkToken ?? selectedPalette.token : selectedPalette.token;
+  return colors[Math.abs(hash) % colors.length];
 }
 
 export function isBinaryPattern(pattern: string[]): boolean {

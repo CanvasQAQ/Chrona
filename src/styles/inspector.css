@@ -99,7 +99,8 @@
   margin-bottom: 6px;
 }
 
-.compound-field-label label {
+.compound-field-label > label,
+.compound-field-label > div > label {
   display: block;
   color: var(--text);
   font-size: 10px;
@@ -601,4 +602,84 @@
 
 .mantine-SegmentedControl-label {
   font-size: 9px;
+}
+
+.creation-modal .property-panel {
+  display: flex;
+  overflow: visible;
+}
+
+.creation-modal .property-content {
+  overflow: visible;
+  padding: 0;
+}
+
+.creation-description {
+  margin: 0 0 16px;
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.creation-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+  padding: 14px 0 0;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  z-index: 1;
+}
+
+.creation-modal .mantine-Modal-content,
+.creation-modal .mantine-Modal-header {
+  background: var(--panel);
+}
+
+.creation-modal .signal-timing-editor .mantine-InputWrapper-label,
+.creation-modal .constraint-edge-heading {
+  font-size: 11px;
+}
+
+.creation-modal .signal-timing-editor .mantine-Input-input {
+  min-height: 36px;
+  height: auto;
+  font-size: 12px;
+}
+
+.inspector-rail {
+  min-height: 0;
+  background: var(--panel);
+}
+
+.inspector-rail-toggle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+  min-height: 150px;
+  padding: 20px 0;
+  color: var(--text-soft);
+  border-radius: 0;
+}
+
+.inspector-rail-toggle span {
+  writing-mode: vertical-rl;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.inspector-rail-toggle:hover {
+  color: var(--violet);
+  background: var(--violet-soft);
+}
+
+.inspector-rail-toggle:focus-visible {
+  outline: 2px solid var(--violet);
+  outline-offset: -2px;
 }

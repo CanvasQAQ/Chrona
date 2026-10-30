@@ -1,4 +1,5 @@
-import { Badge, Slider, TextInput } from "@mantine/core";
+import { ActionIcon, Badge, Slider, TextInput } from "@mantine/core";
+import { PanelRightClose } from "lucide-react";
 import { ConvertibleTimeInput } from "../../components/ConvertibleTimeInput";
 import { DataPatternEditor } from "../../components/DataPatternEditor";
 import { RateInput } from "../../components/RateInput";
@@ -16,6 +17,8 @@ import {
 } from "../../domain/timing";
 
 interface PropertyPanelProps {
+  creation?: boolean;
+  onCollapse?: () => void;
   constraint?: TimingConstraint;
   delayLink?: EdgeDelayLink;
   edgeTimes: (signal: Signal, polarity: EdgePolarity) => number[];
@@ -34,6 +37,8 @@ interface PropertyPanelProps {
 }
 
 export function PropertyPanel({
+  creation = false,
+  onCollapse,
   constraint,
   delayLink,
   edgeTimes,
@@ -52,7 +57,7 @@ export function PropertyPanel({
 }: PropertyPanelProps) {
   return (
     <aside className="property-panel">
-      <div className="panel-heading property-heading">
+      {!creation && <div className="panel-heading property-heading">
         <div>
           <span className="eyebrow">INSPECTOR</span>
           <h2>Properties</h2>
@@ -67,7 +72,8 @@ export function PropertyPanel({
               : selected.kind}
           </Badge>
         )}
-      </div>
+        {onCollapse && <ActionIcon variant="subtle" aria-label="Collapse properties" onClick={onCollapse}><PanelRightClose size={16} /></ActionIcon>}
+      </div>}
 
       {selected && (
         <div className="property-content">
@@ -78,6 +84,7 @@ export function PropertyPanel({
             </div>
             <TextInput
               label="Name"
+              data-autofocus={creation || undefined}
               value={selected.name}
               onChange={(event) =>
                 onUpdateSelected({ name: event.target.value })
@@ -170,7 +177,7 @@ export function PropertyPanel({
             </section>
           )}
 
-          <section className="property-section linked-timing-section">
+          {!creation && <section className="property-section linked-timing-section">
             <div className="section-title">
               <span>Signal timing</span>
               <span className="section-index">04</span>
@@ -189,7 +196,7 @@ export function PropertyPanel({
               onChangeConstraint={onChangeConstraint}
               onRemoveConstraint={onRemoveConstraint}
             />
-          </section>
+          </section>}
         </div>
       )}
     </aside>
