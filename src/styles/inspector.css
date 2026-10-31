@@ -64,6 +64,35 @@
   border-bottom: 1px solid var(--border);
 }
 
+.bus-editor { display: grid; gap: 8px; }
+.bus-editor .property-section { display: grid; gap: 10px; }
+.bus-editor .section-title { margin-bottom: 0; }
+.bus-rule-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.bus-rule-direction { min-width: 0; padding: 8px; background: var(--violet-soft); border-radius: 7px; }
+.bus-rule-direction small { display: block; margin-top: 6px; color: var(--text-soft); font-size: 10px; line-height: 1.5; }
+.bus-rule-length { grid-column: 1 / -1; }
+.bus-selection { display: grid; gap: 6px; }
+.bus-presets { display: flex; gap: 4px; flex-wrap: wrap; }
+.bus-hint, .bus-inheritance { color: var(--text-soft); font-size: 11px; line-height: 1.5; margin: 0; }
+.bus-inheritance { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 5px; }
+.bus-preview { display: grid; min-width: 0; gap: 7px; padding: 9px; border: 1px solid var(--border); border-radius: 7px; font-size: 10px; }
+.bus-preview-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.bus-preview-direction, .bus-preview-caption { margin: 0; color: var(--text-soft); font-size: 10px; line-height: 1.5; }
+.bus-preview-direction { color: var(--violet); }
+.bus-preview-scroll { overflow: auto; max-width: 100%; border: 1px solid var(--border); border-radius: 5px; }
+.bus-preview-scroll.is-full { max-height: 65vh; }
+.bus-preview-table { min-width: 100%; border-collapse: separate; border-spacing: 0; white-space: nowrap; font-family: var(--mantine-font-family-monospace); font-size: 11px; }
+.bus-preview-table th, .bus-preview-table td { padding: 6px 8px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); text-align: left; }
+.bus-preview-table th { background: var(--panel); color: var(--text-soft); font-size: 10px; font-weight: 600; }
+.bus-preview-table td { color: var(--text); background: var(--violet-soft); }
+.bus-preview-table thead th { position: sticky; top: 0; z-index: 2; }
+.bus-preview-table tbody th { position: sticky; left: 0; z-index: 1; }
+.bus-preview-table thead th:first-child { left: 0; z-index: 3; }
+.bus-preview-table tr:last-child > * { border-bottom: 0; }
+.bus-preview-table tr > :last-child { border-right: 0; }
+.bus-full-preview { display: grid; gap: 10px; }
+.bus-resize-warning p { color: var(--text-soft); font-size: 13px; line-height: 1.5; }
+
 .section-title,
 .slider-label {
   display: flex;

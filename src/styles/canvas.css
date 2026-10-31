@@ -15,10 +15,6 @@
   background: #ffffff;
 }
 
-.canvas-viewport[data-palette="monochrome"] .track-header {
-  --track-hover-surface: #f1f1f1;
-}
-
 .canvas-viewport[data-palette="contrast16"],
 .canvas-viewport[data-palette="contrast24"] {
   --panel: #eef3f8;
@@ -28,11 +24,6 @@
   --text-faint: #5b6878;
   --border: #d6dee8;
   background: #f7f9fc;
-}
-
-.canvas-viewport[data-palette="contrast16"] .track-header,
-.canvas-viewport[data-palette="contrast24"] .track-header {
-  --track-hover-surface: #e4ebf3;
 }
 
 [data-mantine-color-scheme="dark"] .canvas-viewport[data-palette="contrast16"],
@@ -46,11 +37,6 @@
   background: #101824;
 }
 
-[data-mantine-color-scheme="dark"] .canvas-viewport[data-palette="contrast16"] .track-header,
-[data-mantine-color-scheme="dark"] .canvas-viewport[data-palette="contrast24"] .track-header {
-  --track-hover-surface: #223247;
-}
-
 [data-mantine-color-scheme="dark"] .canvas-viewport[data-palette="monochrome"] {
   --panel: #080808;
   --canvas: #000000;
@@ -59,10 +45,6 @@
   --text-faint: #bfbfbf;
   --border: #333333;
   background: #000000;
-}
-
-[data-mantine-color-scheme="dark"] .canvas-viewport[data-palette="monochrome"] .track-header {
-  --track-hover-surface: #202020;
 }
 
 .canvas-content {
@@ -134,7 +116,8 @@
 }
 
 .track-header {
-  --track-hover-surface: color-mix(in srgb, var(--panel) 90%, var(--violet));
+  --track-hover-surface: color-mix(in srgb, var(--text) 4%, var(--panel));
+  --track-selected-surface: color-mix(in srgb, var(--text) 10%, var(--panel));
   position: relative;
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr);
@@ -145,6 +128,14 @@
   background: transparent;
   transition: background 160ms ease;
 }
+
+.bus-track-header { grid-template-columns: 16px 28px minmax(0, 1fr); }
+.bus-child-header { padding-left: 20px; }
+.bus-child-header .track-drag-grip { opacity: 0; }
+.bus-track-count { flex: none; margin-left: auto; padding-left: 5px; color: var(--text-soft); font-size: 9px; }
+.bus-summary-shape { fill: color-mix(in srgb, var(--violet) 14%, var(--canvas)); stroke: color-mix(in srgb, var(--violet) 72%, var(--text)); stroke-width: 1.8; vector-effect: non-scaling-stroke; }
+.bus-summary-rails { fill: none; stroke: color-mix(in srgb, var(--violet) 50%, transparent); stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: none; }
+.bus-summary-label { fill: color-mix(in srgb, var(--violet) 68%, var(--text)); font-family: var(--mantine-font-family-monospace); font-size: 10px; font-weight: 700; pointer-events: none; }
 
 .track-actions {
   position: absolute;
@@ -207,9 +198,14 @@
   transform: translateX(0);
 }
 
-.track-header:hover,
-.track-header.selected {
+.track-header:hover {
   background: var(--track-hover-surface);
+}
+
+.track-header.selected {
+  --track-hover-surface: var(--track-selected-surface);
+  background: var(--track-selected-surface);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 22%, var(--panel));
 }
 
 .track-header.drag-over {

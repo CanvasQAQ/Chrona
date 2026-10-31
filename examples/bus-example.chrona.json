@@ -1,0 +1,1101 @@
+{
+  "version": 3,
+  "name": "Bus example",
+  "durationPs": 6000,
+  "constraintDraft": {
+    "setupPs": 10,
+    "holdPs": 10,
+    "status": "awaiting-definition"
+  },
+  "signals": [
+    {
+      "id": "clock-0",
+      "name": "CLK A",
+      "kind": "clock",
+      "startPs": 0,
+      "visible": true,
+      "color": "#3b82f6",
+      "periodPs": 1000,
+      "phasePs": 0,
+      "dutyCycle": 0.5
+    },
+    {
+      "id": "clock-1",
+      "name": "CLK B",
+      "kind": "clock",
+      "startPs": 0,
+      "visible": true,
+      "color": "#3b82f6",
+      "periodPs": 1000,
+      "phasePs": 150,
+      "dutyCycle": 0.5
+    },
+    {
+      "id": "data-1-0",
+      "name": "BUS 1〈0〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 0,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D0",
+        "D40",
+        "D80"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-1",
+      "name": "BUS 1〈1〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 1,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D1",
+        "D41",
+        "D81"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-2",
+      "name": "BUS 1〈2〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 2,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D2",
+        "D42",
+        "D82"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-3",
+      "name": "BUS 1〈3〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 3,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D3",
+        "D43",
+        "D83"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-4",
+      "name": "BUS 1〈4〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 4,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D4",
+        "D44",
+        "D84"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-5",
+      "name": "BUS 1〈5〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 5,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D5",
+        "D45",
+        "D85"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-6",
+      "name": "BUS 1〈6〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 6,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D6",
+        "D46",
+        "D86"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-7",
+      "name": "BUS 1〈7〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 7,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D7",
+        "D47",
+        "D87"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-8",
+      "name": "BUS 1〈8〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 8,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D8",
+        "D48",
+        "D88"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-9",
+      "name": "BUS 1〈9〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 9,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D9",
+        "D49",
+        "D89"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-10",
+      "name": "BUS 1〈10〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 10,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D10",
+        "D50",
+        "D90"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-11",
+      "name": "BUS 1〈11〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 11,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D11",
+        "D51",
+        "D91"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-12",
+      "name": "BUS 1〈12〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 12,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D12",
+        "D52",
+        "D92"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-13",
+      "name": "BUS 1〈13〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 13,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D13",
+        "D53",
+        "D93"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-14",
+      "name": "BUS 1〈14〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 14,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D14",
+        "D54",
+        "D94"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-15",
+      "name": "BUS 1〈15〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 15,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D15",
+        "D55",
+        "D95"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-16",
+      "name": "BUS 1〈16〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 16,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D16",
+        "D56",
+        "D96"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-17",
+      "name": "BUS 1〈17〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 17,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D17",
+        "D57",
+        "D97"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-18",
+      "name": "BUS 1〈18〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 18,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D18",
+        "D58",
+        "D98"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-19",
+      "name": "BUS 1〈19〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 19,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D19",
+        "D59",
+        "D99"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-20",
+      "name": "BUS 1〈20〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 20,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D20",
+        "D60",
+        "D100"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-21",
+      "name": "BUS 1〈21〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 21,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D21",
+        "D61",
+        "D101"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-22",
+      "name": "BUS 1〈22〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 22,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D22",
+        "D62",
+        "D102"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-23",
+      "name": "BUS 1〈23〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 23,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D23",
+        "D63",
+        "D103"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-24",
+      "name": "BUS 1〈24〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 24,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D24",
+        "D64",
+        "D104"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-25",
+      "name": "BUS 1〈25〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 25,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D25",
+        "D65",
+        "D105"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-26",
+      "name": "BUS 1〈26〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 26,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D26",
+        "D66",
+        "D106"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-27",
+      "name": "BUS 1〈27〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 27,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D27",
+        "D67",
+        "D107"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-28",
+      "name": "BUS 1〈28〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 28,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D28",
+        "D68",
+        "D108"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-29",
+      "name": "BUS 1〈29〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 29,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D29",
+        "D69",
+        "D109"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-30",
+      "name": "BUS 1〈30〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 30,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D30",
+        "D70",
+        "D110"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-31",
+      "name": "BUS 1〈31〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 31,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D31",
+        "D71",
+        "D111"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-32",
+      "name": "BUS 1〈32〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 32,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D32",
+        "D72",
+        "D112"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-33",
+      "name": "BUS 1〈33〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 33,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D33",
+        "D73",
+        "D113"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-34",
+      "name": "BUS 1〈34〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 34,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D34",
+        "D74",
+        "D114"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-35",
+      "name": "BUS 1〈35〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 35,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D35",
+        "D75",
+        "D115"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-36",
+      "name": "BUS 1〈36〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 36,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D36",
+        "D76",
+        "D116"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-37",
+      "name": "BUS 1〈37〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 37,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D37",
+        "D77",
+        "D117"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-38",
+      "name": "BUS 1〈38〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 38,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D38",
+        "D78",
+        "D118"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-1-39",
+      "name": "BUS 1〈39〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-1",
+      "busIndex": 39,
+      "startPs": 0,
+      "periodPs": 1000,
+      "pattern": [
+        "D39",
+        "D79",
+        "D119"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-2-0",
+      "name": "BUS 2〈0〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-2",
+      "busIndex": 0,
+      "startPs": 0,
+      "periodPs": 500,
+      "pattern": [
+        "E0",
+        "E20",
+        "E40"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-2-1",
+      "name": "BUS 2〈1〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-2",
+      "busIndex": 1,
+      "startPs": 0,
+      "periodPs": 500,
+      "pattern": [
+        "E1",
+        "E21",
+        "E41"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-2-2",
+      "name": "BUS 2〈2〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-2",
+      "busIndex": 2,
+      "startPs": 0,
+      "periodPs": 500,
+      "pattern": [
+        "E2",
+        "E22",
+        "E42"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-2-3",
+      "name": "BUS 2〈3〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-2",
+      "busIndex": 3,
+      "startPs": 0,
+      "periodPs": 500,
+      "pattern": [
+        "E3",
+        "E23",
+        "E43"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-2-4",
+      "name": "BUS 2〈4〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-2",
+      "busIndex": 4,
+      "startPs": 0,
+      "periodPs": 500,
+      "pattern": [
+        "E4",
+        "E24",
+        "E44"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-2-5",
+      "name": "BUS 2〈5〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-2",
+      "busIndex": 5,
+      "startPs": 0,
+      "periodPs": 500,
+      "pattern": [
+        "E5",
+        "E25",
+        "E45"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-2-6",
+      "name": "BUS 2〈6〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-2",
+      "busIndex": 6,
+      "startPs": 0,
+      "periodPs": 500,
+      "pattern": [
+        "E6",
+        "E26",
+        "E46"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-2-7",
+      "name": "BUS 2〈7〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-2",
+      "busIndex": 7,
+      "startPs": 0,
+      "periodPs": 500,
+      "pattern": [
+        "E7",
+        "E27",
+        "E47"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-2-8",
+      "name": "BUS 2〈8〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-2",
+      "busIndex": 8,
+      "startPs": 0,
+      "periodPs": 500,
+      "pattern": [
+        "E8",
+        "E28",
+        "E48"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-2-9",
+      "name": "BUS 2〈9〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-2",
+      "busIndex": 9,
+      "startPs": 0,
+      "periodPs": 500,
+      "pattern": [
+        "E9",
+        "E29",
+        "E49"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-2-10",
+      "name": "BUS 2〈10〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-2",
+      "busIndex": 10,
+      "startPs": 0,
+      "periodPs": 500,
+      "pattern": [
+        "E10",
+        "E30",
+        "E50"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-2-11",
+      "name": "BUS 2〈11〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-2",
+      "busIndex": 11,
+      "startPs": 0,
+      "periodPs": 500,
+      "pattern": [
+        "E11",
+        "E31",
+        "E51"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-2-12",
+      "name": "BUS 2〈12〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-2",
+      "busIndex": 12,
+      "startPs": 0,
+      "periodPs": 500,
+      "pattern": [
+        "E12",
+        "E32",
+        "E52"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-2-13",
+      "name": "BUS 2〈13〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-2",
+      "busIndex": 13,
+      "startPs": 0,
+      "periodPs": 500,
+      "pattern": [
+        "E13",
+        "E33",
+        "E53"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-2-14",
+      "name": "BUS 2〈14〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-2",
+      "busIndex": 14,
+      "startPs": 0,
+      "periodPs": 500,
+      "pattern": [
+        "E14",
+        "E34",
+        "E54"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-2-15",
+      "name": "BUS 2〈15〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-2",
+      "busIndex": 15,
+      "startPs": 0,
+      "periodPs": 500,
+      "pattern": [
+        "E15",
+        "E35",
+        "E55"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-2-16",
+      "name": "BUS 2〈16〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-2",
+      "busIndex": 16,
+      "startPs": 0,
+      "periodPs": 500,
+      "pattern": [
+        "E16",
+        "E36",
+        "E56"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-2-17",
+      "name": "BUS 2〈17〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-2",
+      "busIndex": 17,
+      "startPs": 0,
+      "periodPs": 500,
+      "pattern": [
+        "E17",
+        "E37",
+        "E57"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-2-18",
+      "name": "BUS 2〈18〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-2",
+      "busIndex": 18,
+      "startPs": 0,
+      "periodPs": 500,
+      "pattern": [
+        "E18",
+        "E38",
+        "E58"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "data-2-19",
+      "name": "BUS 2〈19〉",
+      "kind": "data",
+      "sourceType": "pattern",
+      "busId": "bus-2",
+      "busIndex": 19,
+      "startPs": 0,
+      "periodPs": 500,
+      "pattern": [
+        "E19",
+        "E39",
+        "E59"
+      ],
+      "visible": true,
+      "color": "#3b82f6"
+    }
+  ],
+  "buses": [
+    {
+      "id": "bus-1",
+      "name": "BUS 1",
+      "width": 40,
+      "visible": true,
+      "startPs": 0,
+      "periodPs": 1000,
+      "rule": {
+        "prefix": "D",
+        "start": 0,
+        "channelStep": 1,
+        "timeStep": 40,
+        "length": 3
+      },
+      "displayMode": "selected",
+      "selectedChannels": [
+        0,
+        1,
+        38,
+        39
+      ]
+    },
+    {
+      "id": "bus-2",
+      "name": "BUS 2",
+      "width": 20,
+      "visible": true,
+      "startPs": 0,
+      "periodPs": 500,
+      "rule": {
+        "prefix": "E",
+        "start": 0,
+        "channelStep": 1,
+        "timeStep": 20,
+        "length": 3
+      },
+      "displayMode": "selected",
+      "selectedChannels": [
+        0,
+        1,
+        2
+      ]
+    }
+  ],
+  "delayLinks": [],
+  "timingConstraints": []
+}

@@ -55,6 +55,32 @@ export interface DataSignal extends SignalBase {
   patternSegments?: DataPatternSegment[];
   sourceType?: "pattern" | "sequential";
   derivation?: SequentialDerivation;
+  busId?: string;
+  busIndex?: number;
+  busOverrides?: { pattern?: boolean; startPs?: boolean; periodPs?: boolean };
+}
+
+export interface BusRule {
+  prefix: string;
+  start: number;
+  channelStep: number;
+  timeStep: number;
+  length: number;
+}
+
+export interface Bus {
+  id: string;
+  name: string;
+  width: number;
+  visible: boolean;
+  groupId?: string;
+  startPs: number;
+  periodPs: number;
+  rule: BusRule;
+  displayMode: "collapsed" | "selected" | "all";
+  /** Mode restored by the title disclosure after a temporary fold. */
+  expandedMode?: "selected" | "all";
+  selectedChannels: number[];
 }
 
 export type Signal = ClockSignal | DataSignal;
@@ -164,6 +190,7 @@ export interface TimingProject {
   name: string;
   durationPs: number;
   signals: Signal[];
+  buses?: Bus[];
   signalGroups?: SignalGroup[];
   constraintDraft: TimingConstraintDraft;
   delayLinks?: EdgeDelayLink[];

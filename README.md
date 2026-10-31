@@ -7,6 +7,7 @@ Chrona 是一款面向硬件设计、验证和系统工程师的可交互 Timing
 ## 当前能力
 
 - 创建并编辑 Clock / Data 波形，使用统一的 `ps` 时间模型
+- 创建多通道 Bus，批量生成或粘贴数据，并按折叠、精选、全部三种模式展示
 - 从指定 Clock 与 Data 实时派生 DFF / Latch 输出；支持采样边沿或透明电平，以及 C→Q / D→Q 的 Min / Current / Max 延迟
 - 为任意目标 Signal 配置来自任意 Source Signal 的 Delay，并通过锚点边沿联动整条目标波形
 - 通过底部 Delay Console 集中浏览和调节 Source Delay 与 Derived Data 的 C→Q / D→Q；同一 Derived Signal 的传播延迟聚合在一条控制带中
@@ -32,6 +33,7 @@ Chrona 的 Timing 功能用于制作清晰、可复现的调试示意图，不�
 - [产品需求文档（PRD）](docs/PRD.md)
 - [V1 交互修订说明](docs/INTERACTION_SPEC.md)
 - [工程约定](docs/CONVENTIONS.md)
+- [Bus 功能与交互](docs/BUS.md)
 - [版本记录](CHANGELOG.md)
 
 ## 本地运行
@@ -75,6 +77,7 @@ npm run package:linux
 ## 示例工程
 
 - [Generic Timing Example](examples/generic-timing-example.chrona.json)
+- [Bus Example（2 Clock + 40/20 路 Bus）](examples/bus-example.chrona.json)
 
 常用画布操作：
 

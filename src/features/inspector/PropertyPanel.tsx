@@ -1,4 +1,4 @@
-import { ActionIcon, Badge, Slider, TextInput } from "@mantine/core";
+import { ActionIcon, Badge, Button, Slider, TextInput } from "@mantine/core";
 import { PanelRightClose } from "lucide-react";
 import { ConvertibleTimeInput } from "../../components/ConvertibleTimeInput";
 import { DataPatternEditor } from "../../components/DataPatternEditor";
@@ -8,6 +8,7 @@ import { SignalTimingEditor } from "../../components/SignalTimingEditor";
 import {
   isSequentialDataSignal,
   type ClockSignal,
+  type Bus,
   type DataPatternSegment,
   type EdgeDelayLink,
   type EdgePolarity,
@@ -33,6 +34,9 @@ interface PropertyPanelProps {
   referenceClock?: ClockSignal;
   referencePeriodPs: number;
   selected?: Signal;
+  parentBus?: Bus;
+  onRestoreBusParameter?: (parameter: "pattern" | "startPs" | "periodPs") => void;
+  patternResetVersion?: number;
   sequentialError?: string;
 }
 
@@ -53,6 +57,9 @@ export function PropertyPanel({
   referenceClock,
   referencePeriodPs,
   selected,
+  parentBus,
+  onRestoreBusParameter,
+  patternResetVersion,
   sequentialError,
 }: PropertyPanelProps) {
   return (
@@ -91,6 +98,7 @@ export function PropertyPanel({
               }
             />
             {!isSequentialDataSignal(selected) && (
+              <>
               <ConvertibleTimeInput
                 label="Start"
                 description={`Relative to ${referenceClock?.name ?? "reference clock"}`}
@@ -98,6 +106,8 @@ export function PropertyPanel({
                 referencePeriodPs={referencePeriodPs}
                 onChange={(startPs) => onUpdateSelected({ startPs })}
               />
+              {parentBus && selected.kind === "data" && <div className="bus-inheritance">Start: {selected.busOverrides?.startPs ? "Local override" : "Bus default"}{selected.busOverrides?.startPs && <Button size="compact-xs" variant="subtle" onClick={() => onRestoreBusParameter?.("startPs")}>Restore bus default</Button>}</div>}
+              </>
             )}
           </section>
 
@@ -111,6 +121,7 @@ export function PropertyPanel({
                 periodPs={selected.periodPs}
                 onChange={(periodPs) => onUpdateSelected({ periodPs })}
               />
+              {parentBus && selected.kind === "data" && <div className="bus-inheritance">Interval: {selected.busOverrides?.periodPs ? "Local override" : "Bus default"}{selected.busOverrides?.periodPs && <Button size="compact-xs" variant="subtle" onClick={() => onRestoreBusParameter?.("periodPs")}>Restore bus default</Button>}</div>}
 
               {selected.kind === "clock" && (
                 <>
@@ -149,7 +160,7 @@ export function PropertyPanel({
                 <span className="section-index">03</span>
               </div>
               <DataPatternEditor
-                key={selected.id}
+                key={`${selected.id}-${patternResetVersion ?? 0}`}
                 pattern={selected.pattern}
                 segments={selected.patternSegments}
                 onChange={(
@@ -157,6 +168,7 @@ export function PropertyPanel({
                   patternSegments: DataPatternSegment[],
                 ) => onUpdateSelected({ pattern, patternSegments })}
               />
+              {parentBus && <div className="bus-inheritance">Pattern: {selected.busOverrides?.pattern ? "Local override" : "Bus rule"}{selected.busOverrides?.pattern && <Button size="compact-xs" variant="subtle" onClick={() => onRestoreBusParameter?.("pattern")}>Restore bus default</Button>}</div>}
             </section>
           )}
 

@@ -4,6 +4,7 @@ import {
   type Signal,
   type WavePoint,
 } from "../../domain/timing";
+import { busSlotLabel } from "../../domain/bus";
 
 export const MIN_TRACK_HEIGHT = 48;
 export const MAX_TRACK_HEIGHT = 160;
@@ -18,6 +19,61 @@ export interface DataSegment {
   endPs: number;
   startPs: number;
   token: string;
+}
+
+export interface BusSummarySegment extends DataSegment {
+  /** Ordered by channel index; null means that channel has not started yet. */
+  tokens: (string | null)[];
+  detail: string;
+}
+
+let busTextContext: CanvasRenderingContext2D | null | undefined;
+
+export function measureBusSummaryText(value: string): number {
+  if (busTextContext === undefined) {
+    busTextContext = typeof document === "undefined"
+      ? null : document.createElement("canvas").getContext("2d");
+    if (busTextContext) busTextContext.font = "700 10px monospace";
+  }
+  return busTextContext?.measureText(value).width ?? value.length * 6.2;
+}
+
+export function buildBusSummarySegments(
+  channels: DataSignal[],
+  durationPs: number,
+  signalShiftsPs: Record<string, number> = {},
+): BusSummarySegment[] {
+  const channelSegments = channels.map((channel) => buildDataSegments({
+    ...channel,
+    startPs: channel.startPs + (signalShiftsPs[channel.id] ?? 0),
+  }, durationPs));
+  const boundaries = [...new Set([0, durationPs, ...channelSegments.flatMap((segments) =>
+    segments.flatMap((segment) => [segment.startPs, segment.endPs]),
+  )])].sort((a, b) => a - b);
+  const result: BusSummarySegment[] = [];
+
+  for (let index = 0; index < boundaries.length - 1; index += 1) {
+    const startPs = boundaries[index];
+    const endPs = boundaries[index + 1];
+    if (endPs <= startPs) continue;
+    const tokens = channelSegments.map((segments) =>
+      segments.find((segment) => segment.startPs <= startPs && segment.endPs >= endPs)?.token ?? null,
+    );
+    if (tokens.every((token) => token === null)) continue;
+    const previous = result.at(-1);
+    if (previous?.endPs === startPs && previous.tokens.every((token, channel) => token === tokens[channel])) {
+      previous.endPs = endPs;
+      continue;
+    }
+    result.push({
+      startPs,
+      endPs,
+      tokens,
+      token: busSlotLabel(tokens),
+      detail: tokens.map((token, channel) => `〈${channels[channel].busIndex ?? channel}〉 ${token ?? "—"}`).join(" · "),
+    });
+  }
+  return result;
 }
 
 export interface TrackLayout {

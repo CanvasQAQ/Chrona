@@ -121,8 +121,8 @@ export function buildStandaloneSvg(
   const startRatio = Math.max(0, Math.min(1, range.startPs / safeDuration));
   const endRatio = Math.max(startRatio, Math.min(1, range.endPs / safeDuration));
   const sourceTimelineWidth = Math.max(1, sourceWidth - CANVAS_GUTTER * 2);
-  const sourceStartX = CANVAS_GUTTER + startRatio * sourceTimelineWidth;
-  const sourceEndX = CANVAS_GUTTER + endRatio * sourceTimelineWidth;
+  const sourceStartX = startRatio === 0 ? 0 : CANVAS_GUTTER + startRatio * sourceTimelineWidth;
+  const sourceEndX = endRatio === 1 ? sourceWidth : CANVAS_GUTTER + endRatio * sourceTimelineWidth;
   const sourceRangeWidth = Math.max(1, sourceEndX - sourceStartX);
   const exported = document.createElementNS(SVG_NAMESPACE, "svg");
   exported.setAttribute("xmlns", SVG_NAMESPACE);
@@ -214,6 +214,18 @@ export function buildStandaloneSvg(
   clonedCanvas
     .querySelectorAll<SVGElement>(".data-high-z-line")
     .forEach((element) => element.style.setProperty("stroke", secondaryTextColor));
+  clonedCanvas
+    .querySelectorAll<SVGElement>(".bus-summary-shape")
+    .forEach((element) => {
+      element.style.setProperty("fill", darkExport ? "#2d2946" : "#eee8fa");
+      element.style.setProperty("stroke", darkExport ? "#ae9bde" : "#8265c1");
+    });
+  clonedCanvas
+    .querySelectorAll<SVGElement>(".bus-summary-rails")
+    .forEach((element) => element.style.setProperty("stroke", darkExport ? "#766aab" : "#b9a4e2"));
+  clonedCanvas
+    .querySelectorAll<SVGElement>(".bus-summary-label")
+    .forEach((element) => element.style.setProperty("fill", darkExport ? "#d8cff2" : "#5f478e"));
   clonedCanvas
     .querySelectorAll<SVGElement>(".data-state-label")
     .forEach((element) => {

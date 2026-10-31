@@ -41,6 +41,7 @@ export function parseTimingProject(
         ? { ...signal, sourceType: signal.sourceType ?? "pattern" }
         : signal,
     ),
+    buses: loaded.buses ?? [],
     signalGroups: loaded.signalGroups ?? [],
     delayLinks: (
       loaded.delayLinks ??

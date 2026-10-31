@@ -27,6 +27,7 @@ import {
   Grid2X2,
   GitBranch,
   Layers3,
+  PanelRightClose,
   PanelRightOpen,
   RotateCcw,
   ScanLine,
@@ -49,6 +50,7 @@ import {
   useState,
 } from "react";
 import { SignalTimingEditor } from "./components/SignalTimingEditor";
+import { BusEditor } from "./components/BusEditor";
 import { PropertyPanel } from "./features/inspector/PropertyPanel";
 import { DelayConsole } from "./features/delay-console/DelayConsole";
 import {
@@ -61,8 +63,10 @@ import {
   MIN_LABEL_WIDTH,
   MIN_TRACK_HEIGHT,
   autoLabelWidth,
+  buildBusSummarySegments,
   buildDataSegments,
   formatAxisTime,
+  measureBusSummaryText,
   pathForPoints,
   type TrackLayout,
 } from "./features/canvas/canvasGeometry";
@@ -98,6 +102,8 @@ import {
   resolveProjectTiming,
   segmentsForResolvedWaveform,
 } from "./domain/sequential";
+import { applyBusPatterns, busChannels, createBus, createBusChannels, fitBusSlotLabel, generateBusPattern, resizeBus, updateBusDefaults } from "./domain/bus";
+import type { Bus } from "./domain/timing";
 
 const DEFAULT_CANVAS_SETTINGS = {
   showVerticalGrid: true,
@@ -159,9 +165,11 @@ function App() {
   const [project, setProject] = useState<TimingProject>(initialProject);
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [signalDraft, setSignalDraft] = useState<Signal | null>(null);
+  const [busDraft, setBusDraft] = useState<Bus | null>(null);
   const [delayDraft, setDelayDraft] = useState<EdgeDelayLink | null>(null);
   const [constraintDraft, setConstraintDraft] = useState<TimingConstraint | null>(null);
   const [selectedId, setSelectedId] = useState("");
+  const [patternResetVersion, setPatternResetVersion] = useState(0);
   const [zoom, setZoom] = useState(1);
   const [labelWidth, setLabelWidth] = useState(DEFAULT_LABEL_WIDTH);
   const [isLabelWidthAuto, setIsLabelWidthAuto] = useState(true);
@@ -169,6 +177,8 @@ function App() {
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [isCanvasPanning, setIsCanvasPanning] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [pendingBusResize, setPendingBusResize] = useState<{ id: string; width: number; removed: number; links: number; constraints: number; derived: number } | null>(null);
+  const [busEditorVersion, setBusEditorVersion] = useState(0);
   const [axisSelection, setAxisSelection] = useState<AxisSelection | null>(null);
   const [signalsPanelOpen, setSignalsPanelOpen] = useState(false);
   const [signalSearch, setSignalSearch] = useState("");
@@ -185,6 +195,7 @@ function App() {
   const svgRef = useRef<SVGSVGElement>(null);
   const canvasViewportRef = useRef<HTMLDivElement>(null);
   const zoomRef = useRef(zoom);
+  const fitToViewportRef = useRef(false);
   const pendingScrollLeftRef = useRef<number | null>(null);
   const canvasPanRef = useRef<CanvasPan | null>(null);
   const axisSelectionRef = useRef<AxisSelection | null>(null);
@@ -201,25 +212,41 @@ function App() {
 
   useLayoutEffect(() => {
     if (!isLabelWidthAuto) return;
-    setLabelWidth(autoLabelWidth(project.signals));
-  }, [isLabelWidthAuto, signalNameKey]);
+    setLabelWidth(Math.max(project.buses?.length ? DEFAULT_LABEL_WIDTH : 0, autoLabelWidth(project.signals)));
+  }, [isLabelWidthAuto, signalNameKey, project.buses?.length]);
 
-  const visibleSignals = useMemo(
-    () => project.signals.filter((signal) => signal.visible),
-    [project.signals],
-  );
+  const busById = useMemo(() => new Map((project.buses ?? []).map((bus) => [bus.id, bus])), [project.buses]);
+  const displaySignals = useMemo(() => {
+    const rows: Signal[] = [];
+    const seen = new Set<string>();
+    for (const signal of project.signals) {
+      const bus = signal.kind === "data" && signal.busId ? busById.get(signal.busId) : undefined;
+      if (bus) {
+        if (!seen.has(bus.id)) {
+          seen.add(bus.id);
+          if (bus.visible) rows.push({ id: bus.id, kind: "data", name: bus.name, startPs: bus.startPs, periodPs: bus.periodPs, pattern: ["BUS"], visible: true, color: signal.color });
+        }
+        if (bus.visible && signal.visible && (bus.displayMode === "all" || bus.displayMode === "selected" && bus.selectedChannels.includes(signal.kind === "data" ? signal.busIndex ?? -1 : -1))) rows.push(signal);
+      } else if (signal.visible) rows.push(signal);
+    }
+    return rows;
+  }, [project.signals, busById]);
   const signalGroups = project.signalGroups ?? [];
+  const managerSignals = useMemo(() => [
+    ...project.signals.filter((signal) => signal.kind !== "data" || !signal.busId),
+    ...(project.buses ?? []).map((bus): DataSignal => ({ id: bus.id, kind: "data", name: bus.name, groupId: bus.groupId, startPs: bus.startPs, periodPs: bus.periodPs, pattern: ["BUS"], visible: bus.visible, color: "#687aa2" })),
+  ], [project.signals, project.buses]);
   const normalizedSignalSearch = signalSearch.trim().toLocaleLowerCase();
   const matchingSignals = useMemo(
     () =>
-      project.signals.filter((signal) =>
+      managerSignals.filter((signal) =>
         signal.name.toLocaleLowerCase().includes(normalizedSignalSearch),
       ),
-    [normalizedSignalSearch, project.signals],
+    [normalizedSignalSearch, managerSignals],
   );
-  const selected =
-    project.signals.find((signal) => signal.id === selectedId) ??
-    project.signals[0];
+  const selectedBus = busById.get(selectedId);
+  const selected = project.signals.find((signal) => signal.id === selectedId) ??
+    (!selectedBus && !selectedId ? project.signals.find((signal) => signal.kind !== "data" || !signal.busId) : undefined);
   const referenceClock = project.signals.find(
     (signal): signal is ClockSignal => signal.kind === "clock",
   );
@@ -342,12 +369,12 @@ function App() {
   const canvasWidth = CANVAS_BASE_WIDTH * zoom;
   const trackLayouts = useMemo<TrackLayout[]>(() => {
     let y = AXIS_HEIGHT;
-    return visibleSignals.map((signal) => {
+    return displaySignals.map((signal) => {
       const layout = { height: trackHeight, signal, y };
       y += trackHeight;
       return layout;
     });
-  }, [trackHeight, visibleSignals]);
+  }, [trackHeight, displaySignals]);
   const trackLayoutBySignal = useMemo(
     () => new Map(trackLayouts.map((layout) => [layout.signal.id, layout])),
     [trackLayouts],
@@ -418,6 +445,7 @@ function App() {
 
   const setAnchoredZoom = useCallback((nextZoom: number, anchorClientX?: number) => {
     if (!Number.isFinite(nextZoom) || nextZoom <= 0) return;
+    fitToViewportRef.current = false;
     const viewport = canvasViewportRef.current;
     if (!viewport) {
       zoomRef.current = nextZoom;
@@ -457,12 +485,26 @@ function App() {
   const fitAllWaveforms = useCallback(() => {
     const viewport = canvasViewportRef.current;
     if (!viewport) return;
+    fitToViewportRef.current = true;
     const availableWidth = Math.max(1, viewport.clientWidth - labelWidth);
     const nextZoom = availableWidth / CANVAS_BASE_WIDTH;
     pendingScrollLeftRef.current = 0;
     zoomRef.current = nextZoom;
     setZoom(nextZoom);
     setStatusMessage("All waveforms fitted to the viewport");
+  }, [labelWidth]);
+
+  useEffect(() => {
+    const viewport = canvasViewportRef.current;
+    if (!viewport) return;
+    const observer = new ResizeObserver(() => {
+      if (!fitToViewportRef.current) return;
+      const nextZoom = Math.max(1, viewport.clientWidth - labelWidth) / CANVAS_BASE_WIDTH;
+      zoomRef.current = nextZoom;
+      setZoom(nextZoom);
+    });
+    observer.observe(viewport);
+    return () => observer.disconnect();
   }, [labelWidth]);
 
   useLayoutEffect(() => {
@@ -644,6 +686,7 @@ function App() {
         0,
         nextSelectionStart - CANVAS_GUTTER,
       );
+      fitToViewportRef.current = false;
       zoomRef.current = nextZoom;
       setZoom(nextZoom);
       setStatusMessage("Selected time range fitted to the viewport");
@@ -681,9 +724,63 @@ function App() {
     setProject((current) => ({
       ...current,
       signals: current.signals.map((signal) =>
-        signal.id === id ? ({ ...signal, ...patch } as Signal) : signal,
+        signal.id === id ? ({ ...signal, ...patch,
+          ...(signal.kind === "data" && signal.busId ? { busOverrides: {
+            ...signal.busOverrides,
+            ...(patch.startPs !== undefined ? { startPs: true } : {}),
+            ...(patch.periodPs !== undefined ? { periodPs: true } : {}),
+            ...("pattern" in patch || "patternSegments" in patch ? { pattern: true } : {}),
+          } } : {}),
+        } as Signal) : signal,
       ),
     }));
+  };
+
+  const updateBus = (id: string, patch: Partial<Bus>) => {
+    setProject((current) => updateBusDefaults(current, id, patch));
+  };
+
+  const resizeSelectedBus = (id: string, width: number) => {
+    if (!Number.isInteger(width) || width < 1 || width > 256) return;
+    const old = busById.get(id);
+    if (!old || old.width === width) return;
+    if (width < old.width) {
+      const removed = new Set(busChannels(project, id).filter((signal) => (signal.busIndex ?? 0) >= width).map((signal) => signal.id));
+      const links = (project.delayLinks ?? []).filter((link) => removed.has(link.sourceSignalId) || removed.has(link.targetSignalId)).length;
+      const constraints = (project.timingConstraints ?? []).filter((item) => removed.has(item.sourceSignalId) || removed.has(item.targetSignalId)).length;
+      const derived = project.signals.filter((signal) => isSequentialDataSignal(signal) &&
+        (removed.has(signal.derivation.dataSignalId) || removed.has(signal.derivation.clockSignalId))).length;
+      setPendingBusResize({ id, width, removed: removed.size, links, constraints, derived });
+      return;
+    }
+    setProject((current) => resizeBus(current, id, width, palette.signal[0]));
+    setStatusMessage(`${old.name} now has ${width} channels`);
+  };
+
+  const confirmBusResize = () => {
+    if (!pendingBusResize) return;
+    const { id, width } = pendingBusResize;
+    const name = busById.get(id)?.name ?? "Bus";
+    setProject((current) => resizeBus(current, id, width, palette.signal[0]));
+    setStatusMessage(`${name} now has ${width} channels${pendingBusResize.derived ? ` · ${pendingBusResize.derived} derived signal(s) need a new source` : ""}`);
+    setPendingBusResize(null);
+  };
+
+  const applyPatternsToBus = (id: string, patterns: string[][], indexes: number[], replaceOverrides: boolean, generated: boolean) => {
+    const selectedIndexes = new Map(indexes.map((index, position) => [index, patterns[position]]));
+    setProject((current) => applyBusPatterns(current, id, patterns, indexes, replaceOverrides, generated));
+    const skipped = busChannels(project, id).filter((signal) => selectedIndexes.has(signal.busIndex ?? -1) && signal.busOverrides?.pattern && !replaceOverrides).length;
+    setStatusMessage(`${patterns.length - skipped} channels updated${skipped ? ` · ${skipped} local Pattern edits preserved` : ""}`);
+  };
+
+  const restoreBusParameter = (signalId: string, parameter: "pattern" | "startPs" | "periodPs") => {
+    setProject((current) => ({ ...current, signals: current.signals.map((signal): Signal => {
+      if (signal.id !== signalId || signal.kind !== "data" || !signal.busId) return signal;
+      const bus = current.buses?.find((item) => item.id === signal.busId);
+      if (!bus) return signal;
+      return { ...signal, ...(parameter === "pattern" ? { pattern: generateBusPattern(bus.rule, signal.busIndex ?? 0), patternSegments: undefined } : { [parameter]: bus[parameter] }), busOverrides: { ...signal.busOverrides, [parameter]: false } };
+    }) }));
+    if (parameter === "pattern") setPatternResetVersion((value) => value + 1);
   };
 
   const updateSelected = (patch: Partial<Signal>) => {
@@ -691,12 +788,12 @@ function App() {
   };
 
   const setSignalVisibility = (id: string, visible: boolean) => {
-    updateSignal(id, { visible });
+    if (busById.has(id)) updateBus(id, { visible }); else updateSignal(id, { visible });
     if (!visible && selectedId === id) {
       const nextVisible = project.signals.find(
-        (signal) => signal.id !== id && signal.visible,
+        (signal) => signal.id !== id && signal.visible && (signal.kind !== "data" || !signal.busId || signal.busId !== id),
       );
-      if (nextVisible) setSelectedId(nextVisible.id);
+      setSelectedId(nextVisible?.kind === "data" && nextVisible.busId ? nextVisible.busId : nextVisible?.id ?? project.buses?.find((bus) => bus.id !== id && bus.visible)?.id ?? "");
     }
     setStatusMessage(visible ? "Signal shown" : "Signal hidden");
   };
@@ -708,6 +805,7 @@ function App() {
       signals: current.signals.map((signal) =>
         idSet.has(signal.id) ? { ...signal, visible } : signal,
       ),
+      buses: current.buses?.map((bus) => idSet.has(bus.id) ? { ...bus, visible } : bus),
     }));
     if (!visible && selected && idSet.has(selected.id)) {
       const nextVisible = project.signals.find(
@@ -746,6 +844,7 @@ function App() {
           ? { ...signal, groupId: undefined }
           : signal,
       ),
+      buses: current.buses?.map((bus) => bus.groupId === groupId ? { ...bus, groupId: undefined } : bus),
     }));
     setStatusMessage(`${group?.name ?? "Signal"} group removed`);
   };
@@ -793,7 +892,7 @@ function App() {
 
   const resetLabelWidth = () => {
     setIsLabelWidthAuto(true);
-    setLabelWidth(autoLabelWidth(project.signals));
+    setLabelWidth(Math.max(project.buses?.length ? DEFAULT_LABEL_WIDTH : 0, autoLabelWidth(project.signals)));
     setStatusMessage("Signal column fitted to the 85th percentile");
   };
 
@@ -803,8 +902,8 @@ function App() {
       id,
       name:
         kind === "clock"
-          ? `CLK ${project.signals.length}`
-          : `DATA ${project.signals.length}`,
+          ? `CLK ${project.signals.filter((signal) => signal.kind === "clock").length + 1}`
+          : `DATA ${project.signals.filter((signal) => signal.kind === "data" && !signal.busId).length + 1}`,
       startPs: 0,
       visible: true,
       color: palette.signal[project.signals.length % palette.signal.length],
@@ -826,6 +925,56 @@ function App() {
           };
 
     setSignalDraft(signal);
+  };
+
+  const addBus = () => setBusDraft(createBus(`BUS ${1 + (project.buses?.length ?? 0)}`));
+
+  const deleteBus = (id: string) => {
+    const bus = busById.get(id);
+    const removedIds = new Set(busChannels(project, id).map((signal) => signal.id));
+    const brokenDerived = project.signals.filter((signal) => isSequentialDataSignal(signal) &&
+      (removedIds.has(signal.derivation.dataSignalId) || removedIds.has(signal.derivation.clockSignalId))).length;
+    setProject((current) => {
+      const ids = new Set(busChannels(current, id).map((signal) => signal.id));
+      return { ...current, buses: current.buses?.filter((item) => item.id !== id),
+        signals: current.signals.filter((signal) => !ids.has(signal.id)),
+        delayLinks: current.delayLinks?.filter((link) => !ids.has(link.sourceSignalId) && !ids.has(link.targetSignalId)),
+        timingConstraints: current.timingConstraints?.filter((item) => !ids.has(item.sourceSignalId) && !ids.has(item.targetSignalId)),
+      };
+    });
+    if (selectedId === id || busChannels(project, id).some((signal) => signal.id === selectedId)) {
+      setSelectedId(project.signals.find((signal) => !removedIds.has(signal.id) && (signal.kind !== "data" || !signal.busId))?.id ?? project.buses?.find((item) => item.id !== id)?.id ?? "");
+    }
+    setStatusMessage(`${bus?.name ?? "Bus"} removed${brokenDerived ? ` · ${brokenDerived} derived signal(s) need a new source` : ""}`);
+  };
+
+  const duplicateBus = (id: string) => {
+    const source = busById.get(id);
+    if (!source) return;
+    const original = busChannels(project, id);
+    const copy = { ...source, id: `bus-${crypto.randomUUID()}`, name: `${source.name} copy`, selectedChannels: [...source.selectedChannels] };
+    const ids = new Map(original.map((signal) => [signal.id, `data-${crypto.randomUUID()}`]));
+    const channels: DataSignal[] = original.map((signal) => ({ ...signal,
+      id: ids.get(signal.id)!, busId: copy.id,
+      name: signal.name === `${source.name}〈${signal.busIndex}〉` ? `${copy.name}〈${signal.busIndex}〉` : signal.name,
+      pattern: [...signal.pattern], patternSegments: signal.patternSegments?.map((segment) => ({ ...segment, id: crypto.randomUUID() })),
+      busOverrides: signal.busOverrides ? { ...signal.busOverrides } : undefined,
+      derivation: signal.derivation ? { ...signal.derivation,
+        clockSignalId: ids.get(signal.derivation.clockSignalId) ?? signal.derivation.clockSignalId,
+        dataSignalId: ids.get(signal.derivation.dataSignalId) ?? signal.derivation.dataSignalId,
+      } : undefined,
+    }));
+    setProject((current) => {
+      const signals = [...current.signals];
+      const at = signals.reduce((index, signal, current) => signal.kind === "data" && signal.busId === id ? current : index, -1);
+      signals.splice(at + 1, 0, ...channels);
+      return { ...current, buses: [...(current.buses ?? []), copy], signals,
+        delayLinks: [...(current.delayLinks ?? []), ...(current.delayLinks ?? []).filter((link) => ids.has(link.targetSignalId)).map((link) => ({ ...link, id: crypto.randomUUID(), sourceSignalId: ids.get(link.sourceSignalId) ?? link.sourceSignalId, targetSignalId: ids.get(link.targetSignalId)! }))],
+        timingConstraints: [...(current.timingConstraints ?? []), ...(current.timingConstraints ?? []).filter((item) => ids.has(item.targetSignalId)).map((item) => ({ ...item, id: crypto.randomUUID(), sourceSignalId: ids.get(item.sourceSignalId) ?? item.sourceSignalId, targetSignalId: ids.get(item.targetSignalId)! }))],
+      };
+    });
+    setSelectedId(copy.id);
+    setStatusMessage(`${copy.name} created`);
   };
 
   const addDerivedSignal = () => {
@@ -1047,23 +1196,34 @@ function App() {
   };
 
   const moveSignal = (sourceId: string, targetId: string) => {
+    const targetSignal = project.signals.find((signal) => signal.id === targetId);
+    if (targetSignal?.kind === "data" && targetSignal.busId) targetId = targetSignal.busId;
     if (sourceId === targetId) return;
     setProject((current) => {
-      const from = current.signals.findIndex((signal) => signal.id === sourceId);
-      const to = current.signals.findIndex((signal) => signal.id === targetId);
+      const sourceBus = current.buses?.find((bus) => bus.id === sourceId);
+      const targetBus = current.buses?.find((bus) => bus.id === targetId);
+      const sourceIds = new Set(sourceBus ? busChannels(current, sourceId).map((signal) => signal.id) : [sourceId]);
+      const from = current.signals.findIndex((signal) => sourceIds.has(signal.id));
+      const to = current.signals.findIndex((signal) => targetBus ? signal.kind === "data" && signal.busId === targetId : signal.id === targetId);
       if (from < 0 || to < 0) return current;
-      const signals = [...current.signals];
-      const [moved] = signals.splice(from, 1);
-      signals.splice(to, 0, moved);
+      const moved = current.signals.filter((signal) => sourceIds.has(signal.id));
+      const signals = current.signals.filter((signal) => !sourceIds.has(signal.id));
+      const targetIndex = signals.findIndex((signal) => targetBus ? signal.kind === "data" && signal.busId === targetId : signal.id === targetId);
+      signals.splice(targetIndex, 0, ...moved);
       return { ...current, signals };
     });
     setStatusMessage("Signal order updated");
   };
 
   const moveSignalByOffset = (id: string, offset: number) => {
-    const index = project.signals.findIndex((signal) => signal.id === id);
-    const target = project.signals[index + offset];
-    if (target) moveSignal(id, target.id);
+    const roots: string[] = [];
+    for (const signal of project.signals) {
+      const root = signal.kind === "data" && signal.busId ? signal.busId : signal.id;
+      if (!roots.includes(root)) roots.push(root);
+    }
+    const index = roots.indexOf(id);
+    const target = roots[index + offset];
+    if (target) moveSignal(id, target);
   };
 
   const handleDrop = (event: DragEvent<HTMLDivElement>, targetId: string) => {
@@ -1173,7 +1333,8 @@ function App() {
       }
 
       setProject(result.project);
-      setSelectedId(result.project.signals[0]?.id ?? "");
+      const first = result.project.signals[0];
+      setSelectedId(first?.kind === "data" && first.busId ? first.busId : first?.id ?? "");
       setExportStartPs(0);
       setExportEndPs(result.project.durationPs);
       setIsLabelWidthAuto(true);
@@ -1190,7 +1351,7 @@ function App() {
       group
         ? signal.groupId === group.id
         : !signal.groupId || !knownGroupIds.has(signal.groupId);
-    const allGroupSignals = project.signals.filter(belongsToGroup);
+    const allGroupSignals = managerSignals.filter(belongsToGroup);
     const signals = matchingSignals.filter(belongsToGroup);
     if (signals.length === 0 && normalizedSignalSearch) return null;
     if (signals.length === 0 && !group) return null;
@@ -1298,9 +1459,7 @@ function App() {
                     }}
                     comboboxProps={{ position: "bottom-end", shadow: "md" }}
                     onChange={(value) =>
-                      updateSignal(signal.id, {
-                        groupId: value || undefined,
-                      })
+                      busById.has(signal.id) ? updateBus(signal.id, { groupId: value || undefined }) : updateSignal(signal.id, { groupId: value || undefined })
                     }
                   />
                 </div>
@@ -1415,7 +1574,7 @@ function App() {
       if (!resolved) return null;
       const sourceLayout = trackLayoutBySignal.get(constraint.sourceSignalId);
       const targetLayout = trackLayoutBySignal.get(constraint.targetSignalId);
-      if (!sourceLayout || !targetLayout) return null;
+      if (!targetLayout) return null;
       return (
         <g key={constraint.id}>
           {resolved.windows.map((window, windowIndex) => {
@@ -1441,7 +1600,7 @@ function App() {
                   height={Math.max(1, targetLayout.height - 8)}
                   rx="4"
                 />
-                <line
+                {sourceLayout && <line
                   x1={referenceX}
                   x2={referenceX}
                   y1={Math.min(sourceLayout.y, targetLayout.y) + 4}
@@ -1449,7 +1608,7 @@ function App() {
                     sourceLayout.y + sourceLayout.height,
                     targetLayout.y + targetLayout.height,
                   ) - 4}
-                />
+                />}
               </g>
             );
           })}
@@ -1502,11 +1661,19 @@ function App() {
   const draftTarget = project.signals.find((signal) => signal.id === timingDraft?.targetSignalId);
   const closeCreation = () => {
     setSignalDraft(null);
+    setBusDraft(null);
     setDelayDraft(null);
     setConstraintDraft(null);
   };
   const confirmCreation = () => {
-    if (signalDraft) {
+    if (busDraft) {
+      if (!busDraft.name.trim()) return;
+      const bus = { ...busDraft, name: busDraft.name.trim() };
+      const channels = createBusChannels(bus, palette.signal[project.signals.length % palette.signal.length]);
+      setProject((current) => ({ ...current, buses: [...(current.buses ?? []), bus], signals: [...current.signals, ...channels] }));
+      setSelectedId(bus.id);
+      setStatusMessage(`${bus.name} · ${bus.width} channels added`);
+    } else if (signalDraft) {
       if (!signalDraft.name.trim()) return;
       const signal = { ...signalDraft, name: signalDraft.name.trim() };
       setProject((current) => ({ ...current, version: 3, signals: [...current.signals, signal] }));
@@ -1545,11 +1712,15 @@ function App() {
         onSaveProject={saveProject}
       />
 
-      <Modal opened={Boolean(signalDraft || timingDraft)} onClose={closeCreation}
-        title={signalDraft ? `Add ${isSequentialDataSignal(signalDraft) ? "derived" : signalDraft.kind} signal` : delayDraft ? "Add source delay" : "Add timing constraint"}
+      <Modal opened={Boolean(busDraft || signalDraft || timingDraft)} onClose={closeCreation}
+        title={busDraft ? "Add Bus" : signalDraft ? `Add ${isSequentialDataSignal(signalDraft) ? "derived" : signalDraft.kind} signal` : delayDraft ? "Add source delay" : "Add timing constraint"}
         centered size="lg" className="creation-modal" closeOnClickOutside={false}
         closeButtonProps={{ "aria-label": "Cancel creation" }} transitionProps={{ transition: "fade", exitDuration: 0 }}>
-        <p className="creation-description">{signalDraft ? "Configure your signal, then click Add to draw it on the canvas." : `Configure timing for ${draftTarget?.name ?? "signal"}, then click Add to apply it.`}</p>
+        <p className="creation-description">{busDraft ? "Define independent parallel data channels." : signalDraft ? "Configure your signal, then click Add to draw it on the canvas." : `Configure timing for ${draftTarget?.name ?? "signal"}, then click Add to apply it.`}</p>
+        {busDraft && <BusEditor creation bus={busDraft} channels={[]} referencePeriodPs={referencePeriodPs}
+          onChange={(patch) => setBusDraft((draft) => draft ? { ...draft, ...patch } : draft)}
+          onResize={(width) => setBusDraft((draft) => draft ? { ...draft, width } : draft)}
+          onApplyPatterns={() => {}} />}
         {signalDraft && <PropertyPanel creation project={project} selected={signalDraft}
           referenceClock={referenceClock} referencePeriodPs={referencePeriodPs}
           edgeTimes={(signal, polarity) => resolvedProjectTiming.edgeTimes(signal.id, polarity)}
@@ -1566,8 +1737,15 @@ function App() {
         {signalDraft && !signalDraft.name.trim() && <p role="alert" className="sequential-error">Enter a signal name.</p>}
         <div className="creation-actions">
           <Button variant="default" onClick={closeCreation}>Cancel</Button>
-          <Button disabled={signalDraft ? !signalDraft.name.trim() : !draftTarget} onClick={confirmCreation}>Add</Button>
+          <Button disabled={busDraft ? !busDraft.name.trim() || !Number.isInteger(busDraft.width) || busDraft.width < 1 || busDraft.width > 256 || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(busDraft.rule.prefix) || ![busDraft.rule.start, busDraft.rule.channelStep, busDraft.rule.timeStep, busDraft.rule.length].every(Number.isInteger) || busDraft.rule.length < 1 || busDraft.rule.length > 256 : signalDraft ? !signalDraft.name.trim() : !draftTarget} onClick={confirmCreation}>Add</Button>
         </div>
+      </Modal>
+      <Modal opened={Boolean(pendingBusResize)} onClose={() => { setPendingBusResize(null); setBusEditorVersion((value) => value + 1); }} title="Reduce Bus width?" centered size="sm">
+        {pendingBusResize && <div className="bus-resize-warning">
+          <p>{busById.get(pendingBusResize.id)?.name} will have {pendingBusResize.width} channels. This removes {pendingBusResize.removed} channel(s) and their data.</p>
+          <p>{pendingBusResize.links} Delay link(s) and {pendingBusResize.constraints} Setup/Hold constraint(s) will be removed. {pendingBusResize.derived} derived signal(s) will lose a source and show an error until reconfigured.</p>
+          <div className="creation-actions"><Button variant="default" onClick={() => { setPendingBusResize(null); setBusEditorVersion((value) => value + 1); }}>Cancel</Button><Button color="red" onClick={confirmBusResize}>Reduce channels</Button></div>
+        </div>}
       </Modal>
       <div className={`workspace${inspectorOpen ? "" : " inspector-collapsed"}`}>
         <main
@@ -1630,8 +1808,8 @@ function App() {
                     onClick={() => setSignalsPanelOpen((opened) => !opened)}
                   >
                     Signals
-                    {project.signals.some((signal) => !signal.visible) &&
-                      ` · ${project.signals.filter((signal) => !signal.visible).length} hidden`}
+                    {managerSignals.some((signal) => !signal.visible) &&
+                      ` · ${managerSignals.filter((signal) => !signal.visible).length} hidden`}
                   </Button>
                 </Popover.Target>
                 <Popover.Dropdown className="signals-panel">
@@ -1645,10 +1823,10 @@ function App() {
                         variant="subtle"
                         color="gray"
                         size="compact-xs"
-                        disabled={project.signals.length === 0}
+                        disabled={managerSignals.length === 0}
                         onClick={() =>
                           setSignalsVisibility(
-                            project.signals.map((signal) => signal.id),
+                            managerSignals.map((signal) => signal.id),
                             true,
                           )
                         }
@@ -1662,7 +1840,7 @@ function App() {
                         disabled={project.signals.length === 0}
                         onClick={() =>
                           setSignalsVisibility(
-                            project.signals.map((signal) => signal.id),
+                            managerSignals.map((signal) => signal.id),
                             false,
                           )
                         }
@@ -1679,7 +1857,7 @@ function App() {
                     onChange={(event) => setSignalSearch(event.target.value)}
                   />
                   <div className="signal-groups-scroll">
-                    {project.signals.length === 0 ? (
+                    {managerSignals.length === 0 ? (
                       <div className="signal-manager-empty">Add a signal to start organizing.</div>
                     ) : matchingSignals.length === 0 ? (
                       <div className="signal-manager-empty">No signals match “{signalSearch}”.</div>
@@ -1753,6 +1931,7 @@ function App() {
                   >
                     Data
                   </Menu.Item>
+                  <Menu.Item leftSection={<Layers3 size={16} />} onClick={addBus}>Bus</Menu.Item>
                   <Menu.Divider />
                   <Menu.Item
                     leftSection={<GitBranch size={16} />}
@@ -2038,18 +2217,23 @@ function App() {
                   <span>TRACKS</span>
                   <small>{isLabelWidthAuto ? "Auto · P85" : `${Math.round(labelWidth)} px`}</small>
                 </div>
-                {trackLayouts.map(({ height, signal }) => (
+                {trackLayouts.map(({ height, signal }) => {
+                  const bus = busById.get(signal.id);
+                  const child = signal.kind === "data" && signal.busId;
+                  return (
                   <div
                     key={signal.id}
                     className={[
                       "track-header",
+                      bus ? "bus-track-header" : "",
+                      child ? "bus-child-header" : "",
                       signal.id === selectedId ? "selected" : "",
                       signal.id === dragOverId ? "drag-over" : "",
                     ]
                       .filter(Boolean)
                       .join(" ")}
                     style={{ height }}
-                    draggable
+                    draggable={!child}
                     onDragStart={() => setDraggedId(signal.id)}
                     onDragEnd={() => {
                       setDraggedId(null);
@@ -2066,6 +2250,7 @@ function App() {
                       size={14}
                       aria-hidden="true"
                     />
+                    {bus && <ActionIcon variant="subtle" color="gray" size="sm" aria-label={`${bus.displayMode === "collapsed" ? "Expand" : "Collapse"} ${bus.name}`} onClick={() => updateBus(bus.id, { displayMode: bus.displayMode === "collapsed" ? bus.expandedMode ?? "all" : "collapsed" })}>{bus.displayMode === "collapsed" ? <ChevronRight size={14} /> : <ChevronDown size={14} />}</ActionIcon>}
                     <UnstyledButton
                       className="track-select"
                       aria-pressed={signal.id === selectedId}
@@ -2085,7 +2270,9 @@ function App() {
                       }}
                     >
                       <span>{signal.name}</span>
+                      {bus && <small className="bus-track-count">{bus.displayMode === "selected" ? `${bus.width - bus.selectedChannels.length} hidden` : `${bus.width} ch`}</small>}
                     </UnstyledButton>
+                    {!child &&
                     <div className="track-actions">
                       <Tooltip label={`Duplicate ${signal.name}`}>
                         <ActionIcon
@@ -2093,7 +2280,7 @@ function App() {
                           color="gray"
                           size="sm"
                           aria-label={`Duplicate ${signal.name}`}
-                          onClick={() => duplicateSignal(signal.id)}
+                          onClick={() => bus ? duplicateBus(bus.id) : duplicateSignal(signal.id)}
                         >
                           <Copy size={14} />
                         </ActionIcon>
@@ -2120,7 +2307,7 @@ function App() {
                           </ActionIcon>
                         </Popover.Target>
                         <Popover.Dropdown className="delete-confirmation">
-                          <span>Delete {signal.name}?</span>
+                          <span>Delete {signal.name}? {bus ? `${bus.width} channels and linked Timing will be removed.` : ""}</span>
                           <div>
                             <Tooltip label="Cancel">
                               <ActionIcon
@@ -2140,7 +2327,7 @@ function App() {
                                 size="sm"
                                 aria-label={`Confirm deleting ${signal.name}`}
                                 onClick={() => {
-                                  deleteSignal(signal.id);
+                                  if (bus) deleteBus(bus.id); else deleteSignal(signal.id);
                                   setPendingDeleteId(null);
                                 }}
                               >
@@ -2151,8 +2338,9 @@ function App() {
                         </Popover.Dropdown>
                       </Popover>
                     </div>
+                    }
                   </div>
-                ))}
+                ); })}
                 <div
                   className="signal-column-resizer"
                   role="separator"
@@ -2284,6 +2472,35 @@ function App() {
                 {renderSequentialGuides()}
 
                 {trackLayouts.map(({ height, signal, y }) => {
+                  const bus = busById.get(signal.id);
+                  if (bus) {
+                    const segments = buildBusSummarySegments(
+                      busChannels(project, bus.id), project.durationPs, resolvedDelayLinks.signalShiftsPs,
+                    );
+                    return <g key={bus.id} className="wave-row bus-wave-row">
+                      <rect className="row-hitbox" x="0" y={y} width="100%" height={height} />
+                      <line className="row-divider" x1="0" x2="100%" y1={y + height - 1} y2={y + height - 1} />
+                      {segments.map((segment, index) => {
+                        const x = timelineX(segment.startPs);
+                        const width = Math.max(0, timelineX(segment.endPs) - x);
+                        const left = x + 0.5;
+                        const right = x + width - 0.5;
+                        const center = y + height / 2;
+                        const top = center - Math.max(11, height * 0.24);
+                        const bottom = center + Math.max(11, height * 0.24);
+                        const notch = Math.min(8, width / 4);
+                        const label = fitBusSlotLabel(segment.tokens, width - 28, measureBusSummaryText);
+                        const clipId = `bus-summary-clip-${bus.id}-${index}`;
+                        return <g key={index}>
+                          <title>{segment.detail}</title>
+                          <defs><clipPath id={clipId}><rect x={x + 12} y={y} width={Math.max(0, width - 24)} height={height} /></clipPath></defs>
+                          <path className="bus-summary-shape" d={`M ${left} ${center} L ${left + notch} ${top} L ${right - notch} ${top} L ${right} ${center} L ${right - notch} ${bottom} L ${left + notch} ${bottom} Z`} />
+                          {width > 30 && <path className="bus-summary-rails" d={`M ${left + notch + 3} ${top + 4} H ${right - notch - 3} M ${left + notch + 3} ${bottom - 4} H ${right - notch - 3}`} />}
+                          {label && <text className="bus-summary-label" x={x + 14} y={center + 3.5} clipPath={`url(#${clipId})`}>{label}</text>}
+                        </g>;
+                      })}
+                    </g>;
+                  }
                   const signalIndex = project.signals.findIndex(
                     (projectSignal) => projectSignal.id === signal.id,
                   );
@@ -2620,10 +2837,18 @@ function App() {
             </Tooltip>
           </aside>
         )}
-        {inspectorOpen && <PropertyPanel
+        {inspectorOpen && selectedBus && <aside className="property-panel"><div className="panel-heading property-heading"><div><span className="eyebrow">INSPECTOR</span><h2>Bus properties</h2></div><ActionIcon variant="subtle" aria-label="Collapse properties" onClick={() => setInspectorOpen(false)}><PanelRightClose size={16} /></ActionIcon></div><div className="property-content"><BusEditor key={`${selectedBus.id}-${busEditorVersion}`} bus={selectedBus} channels={busChannels(project, selectedBus.id)} referencePeriodPs={referencePeriodPs}
+          onChange={(patch) => updateBus(selectedBus.id, patch)}
+          onResize={(width) => resizeSelectedBus(selectedBus.id, width)}
+          onApplyPatterns={(patterns, indexes, replaceOverrides, generated) => applyPatternsToBus(selectedBus.id, patterns, indexes, replaceOverrides, generated)}
+        /></div></aside>}
+        {inspectorOpen && !selectedBus && <PropertyPanel
           onCollapse={() => setInspectorOpen(false)}
           project={project}
           selected={selected}
+          parentBus={selected?.kind === "data" && selected.busId ? busById.get(selected.busId) : undefined}
+          onRestoreBusParameter={(parameter) => selected && restoreBusParameter(selected.id, parameter)}
+          patternResetVersion={patternResetVersion}
           referenceClock={referenceClock}
           referencePeriodPs={referencePeriodPs}
           sequentialError={

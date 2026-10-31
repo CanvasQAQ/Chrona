@@ -10,6 +10,8 @@
 > 2026-08-01 修订：Timing 功能调整为附着于单个 Signal 的 Delay 与 Setup/Hold 约束，补充多边沿选择、派生 Start、图示标签和 Canvas Settings。
 >
 > 2026-08-04 修订：增加 Sequential Derived Data；DFF 按 Clock 边沿采样，Latch 按 Clock 高/低电平透明，并分别计算 C→Q 与 D→Q 延迟范围。
+>
+> 2026-10-31 修订：基础 Bus 已实现。创建、批量数据、继承覆盖、精选展示、Timing 与保存导出规则见 [Bus 功能与交互](BUS.md)。第 10.3 节原 V2 列项由本次提前交付；高级串并转换仍不在范围内。
 
 ## 1. 产品概述
 
@@ -357,7 +359,7 @@ Shortcut 是否纳入首个 V1 发布里程碑，在开发排期时确认。
 ### 10.3 V2 / P1：编辑能力增强
 
 - Annotation：Text、Arrow、Measurement
-- Bus，例如 `DATA[7:0]`
+- Bus，例如 `DATA[7:0]`（基础多通道编辑与展示已提前实现；数值解析和串并转换仍待后续版本）
 
 ### 10.4 V2 / P2：输出能力增强
 
