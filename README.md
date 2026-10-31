@@ -2,7 +2,7 @@
 
 Chrona 是一款面向硬件设计、验证和系统工程师的可交互 Timing Diagram 编辑器。
 
-当前版本：v0.2.0。
+当前版本：v0.3.0。
 
 ## 当前能力
 
@@ -15,6 +15,7 @@ Chrona 是一款面向硬件设计、验证和系统工程师的可交互 Timing
 - 为任意 Signal 添加多边沿 Setup/Hold 约束；目标边沿进入窗口时，以低干扰的半透明红色区域反馈
 - 调整轨道高度、纵向网格和网格间隔，并随工程保存
 - 保存/打开 `.chrona.json` 工程，导出包含波形、Delay 与约束窗口的 SVG
+- 桌面版可按需启用本地 MCP，让 Agent 读取、创建和修改当前工程；支持版本冲突保护、批量提交与统一 Undo/Redo
 
 Chrona 的 Timing 功能用于制作清晰、可复现的调试示意图，不替代 STA，也不自动判断路径、裕量或问题来源。
 
@@ -35,6 +36,8 @@ Chrona 的 Timing 功能用于制作清晰、可复现的调试示意图，不�
 - [工程约定](docs/CONVENTIONS.md)
 - [Bus 功能与交互](docs/BUS.md)
 - [版本记录](CHANGELOG.md)
+- [本机 Agent 接入与 MCP API](docs/AGENT_API.md)
+- [Agent 接入实施计划](docs/AGENT_INTEGRATION_PLAN.md)
 
 ## 本地运行
 

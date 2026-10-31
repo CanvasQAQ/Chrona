@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, shell } = require("electron/main");
 const path = require("node:path");
+require("./agent-ipc.cjs").installAgentIpc(ipcMain, app);
 
 const isDevelopment = process.argv.includes("--dev");
 const isMac = process.platform === "darwin";

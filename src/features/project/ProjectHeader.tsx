@@ -23,6 +23,7 @@ import {
 import {
   type ChangeEventHandler,
   type RefObject,
+  type ReactNode,
   useEffect,
   useState,
 } from "react";
@@ -31,6 +32,7 @@ import chronaIcon from "../../assets/chrona.png";
 export type ExportMode = "view" | "range" | "all";
 
 interface ProjectHeaderProps {
+  extraActions?: ReactNode;
   durationPs: number;
   exportEndPs: number;
   exportMode: ExportMode;
@@ -48,6 +50,7 @@ interface ProjectHeaderProps {
 }
 
 export function ProjectHeader({
+  extraActions,
   durationPs,
   exportEndPs,
   exportMode,
@@ -88,6 +91,7 @@ export function ProjectHeader({
       </div>
 
       <div className="topbar-actions">
+        {extraActions}
         <Tooltip label="Open project">
           <ActionIcon
             variant="subtle"

@@ -1,6 +1,6 @@
 {
   "name": "chrona",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "An interactive timing diagram editor for hardware engineers.",
   "author": {
     "name": "CanvasQAQ",
@@ -27,9 +27,11 @@
   "dependencies": {
     "@mantine/core": "9.4.2",
     "@mantine/hooks": "9.4.2",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "lucide-react": "1.27.0",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/react": "19.2.17",
@@ -53,6 +55,7 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
+      "shared/**/*",
       "build/icon.png",
       "package.json"
     ],

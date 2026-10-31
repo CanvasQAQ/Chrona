@@ -104,6 +104,8 @@ import {
 } from "./domain/sequential";
 import { applyBusPatterns, busChannels, createBus, createBusChannels, fitBusSlotLabel, generateBusPattern, resizeBus, updateBusDefaults } from "./domain/bus";
 import type { Bus } from "./domain/timing";
+import { useProjectSession } from "./features/agent/useProjectSession";
+import { AgentPanel } from "./features/agent/AgentPanel";
 
 const DEFAULT_CANVAS_SETTINGS = {
   showVerticalGrid: true,
@@ -162,7 +164,7 @@ interface ExportRange {
 
 function App() {
   const colorScheme = useComputedColorScheme("light");
-  const [project, setProject] = useState<TimingProject>(initialProject);
+  const { project, setProject, session, snapshot } = useProjectSession(initialProject);
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [signalDraft, setSignalDraft] = useState<Signal | null>(null);
   const [busDraft, setBusDraft] = useState<Bus | null>(null);
@@ -189,6 +191,11 @@ function App() {
   const [exportStartPs, setExportStartPs] = useState(0);
   const [exportEndPs, setExportEndPs] = useState(initialProject.durationPs);
   const [statusMessage, setStatusMessage] = useState("Timing engine ready");
+  useEffect(() => {
+    if (snapshot.activity.startsWith("Agent ") || snapshot.activity === "Undo" || snapshot.activity === "Redo") {
+      setStatusMessage(snapshot.activity);
+    }
+  }, [snapshot.activity, snapshot.revision]);
   const [delayConsoleOpen, setDelayConsoleOpen] = useState(false);
   const [delayConsoleCollapsed, setDelayConsoleCollapsed] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1332,7 +1339,7 @@ function App() {
         return;
       }
 
-      setProject(result.project);
+      session.open(result.project);
       const first = result.project.signals[0];
       setSelectedId(first?.kind === "data" && first.busId ? first.busId : first?.id ?? "");
       setExportStartPs(0);
@@ -1696,6 +1703,7 @@ function App() {
   return (
     <div className="app-shell" data-platform={desktopPlatform}>
       <ProjectHeader
+        extraActions={<AgentPanel session={session} snapshot={snapshot} />}
         durationPs={project.durationPs}
         exportEndPs={exportEndPs}
         exportMode={exportMode}
