@@ -176,3 +176,36 @@ export function fitBusSlotLabel(
   const count = `${active.length}/${tokens.length}`;
   return measureText(count) <= maxWidthPx ? count : "";
 }
+
+// Pair slot boundaries only among channels with the same cadence.
+export function busMixedWindows(channels: DataSignal[], duration: number, shifts: Record<string, number>, early: number, late: number) {
+  const groups = new Map<number, { first: number; last: number; possible: boolean }>();
+  for (const channel of channels) {
+    const period = channel.periodPs;
+    if (!Number.isFinite(period) || period <= 0) continue;
+    const start = channel.startPs + (shifts[channel.id] ?? 0);
+    const inherited = channel.busOffsetPs === undefined;
+    const first = start - (inherited ? early : 0);
+    const last = start + (inherited ? late : 0);
+    const group = groups.get(period);
+    groups.set(period, { first: Math.min(first, group?.first ?? first), last: Math.max(last, group?.last ?? last),
+      possible: Boolean(group?.possible || inherited && (early > 0 || late > 0)) });
+  }
+  const windows: { startPs: number; endPs: number; possible: boolean }[] = [];
+  for (const [period, { first, last, possible }] of groups) {
+    if (first >= last) continue;
+    for (let slot = Math.max(0, Math.floor(-last / period) + 1); first + slot * period < duration; slot++) {
+      windows.push({ startPs: Math.max(0, first + slot * period), endPs: Math.min(duration, last + slot * period), possible });
+      if (last - first >= period) { windows[windows.length - 1].endPs = duration; break; }
+    }
+  }
+  const merged: typeof windows = [];
+  for (const window of windows.sort((a, b) => a.startPs - b.startPs)) {
+    const prev = merged.at(-1);
+    if (prev && prev.endPs >= window.startPs) {
+      prev.endPs = Math.max(prev.endPs, window.endPs);
+      prev.possible ||= window.possible;
+    } else merged.push(window);
+  }
+  return merged;
+}

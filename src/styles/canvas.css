@@ -1036,3 +1036,15 @@
   stroke-width: 3px;
   pointer-events: none;
 }
+
+.bus-mixed-base { fill: color-mix(in srgb, var(--text) 8%, var(--canvas)); stroke: color-mix(in srgb, var(--text) 65%, var(--canvas)); stroke-width: 1.2; }
+.bus-hatch-line { stroke: color-mix(in srgb, var(--text) 30%, var(--canvas)); stroke-width: 1; }
+
+.linked-timing-window.is-mixed rect {
+  fill: color-mix(in srgb, #d9a400 24%, transparent);
+  stroke: #bd8c00;
+}
+.linked-timing-window.is-mixed line {
+  stroke: #bd8c00;
+  opacity: 0.7;
+}

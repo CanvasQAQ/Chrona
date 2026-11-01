@@ -4,6 +4,7 @@ import {
   type Signal,
   type WavePoint,
 } from "../../domain/timing";
+export { busMixedWindows } from "../../domain/bus";
 import { busSlotLabel } from "../../domain/bus";
 
 export const MIN_TRACK_HEIGHT = 48;

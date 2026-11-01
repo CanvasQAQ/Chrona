@@ -3,7 +3,6 @@ import {
   Button,
   Menu,
   Modal,
-  NumberInput,
   Popover,
   Select,
   SegmentedControl,
@@ -13,6 +12,7 @@ import {
   UnstyledButton,
   useComputedColorScheme,
 } from "@mantine/core";
+import { LiveNumberInput as NumberInput } from "./components/LiveNumberInput";
 import {
   Check,
   ChevronDown,
@@ -64,6 +64,7 @@ import {
   MIN_TRACK_HEIGHT,
   autoLabelWidth,
   buildBusSummarySegments,
+  busMixedWindows,
   buildDataSegments,
   formatAxisTime,
   measureBusSummaryText,
@@ -84,7 +85,7 @@ import {
   clockWavePoints,
   colorForDataToken,
   isSequentialDataSignal,
-  resolveTimingConstraint,
+  resolveConstraintRows,
   type DelayRange,
   type DataLabelColor,
   type DataLabelSize,
@@ -275,11 +276,8 @@ function App() {
   );
   const consoleDelayCount =
     (project.delayLinks?.length ?? 0) + derivedDelayCount;
-  const selectedConstraint = selected
-    ? (project.timingConstraints ?? []).find(
-        (constraint) => constraint.targetSignalId === selected.id,
-      )
-    : undefined;
+  const constraintTarget = selected ?? managerSignals.find(signal => signal.id === selectedBus?.id);
+  const selectedConstraint = project.timingConstraints?.find(item => item.targetSignalId === constraintTarget?.id);
   const resolvedProjectTiming = useMemo(
     () =>
       resolveProjectTiming(
@@ -390,27 +388,9 @@ function App() {
     byId: resolvedProjectTiming.delayById,
     signalShiftsPs: resolvedProjectTiming.signalShiftsPs,
   };
-  const resolvedConstraints = useMemo(
-    () =>
-      (project.timingConstraints ?? []).map((constraint) => ({
-        constraint,
-        resolved: resolveTimingConstraint(
-          project.signals,
-          project.durationPs,
-          constraint,
-          resolvedDelayLinks.signalShiftsPs,
-          (signal, polarity) =>
-            resolvedProjectTiming.edgeTimes(signal.id, polarity),
-        ),
-      })),
-    [
-      project.durationPs,
-      project.signals,
-      project.timingConstraints,
-      resolvedDelayLinks.signalShiftsPs,
-      resolvedProjectTiming,
-    ],
-  );
+  const resolvedConstraints = useMemo(() => (project.timingConstraints ?? []).flatMap(constraint =>
+    resolveConstraintRows(project, constraint, (signal, polarity) => resolvedProjectTiming.edgeTimes(signal.id, polarity), resolvedProjectTiming.signalShiftsPs)
+  ), [project, resolvedProjectTiming]);
   const canvasHeight = Math.max(
     AXIS_HEIGHT +
       trackLayouts.reduce((total, track) => total + track.height, 0),
@@ -942,7 +922,7 @@ function App() {
     const brokenDerived = project.signals.filter((signal) => isSequentialDataSignal(signal) &&
       (removedIds.has(signal.derivation.dataSignalId) || removedIds.has(signal.derivation.clockSignalId))).length;
     setProject((current) => {
-      const ids = new Set(busChannels(current, id).map((signal) => signal.id));
+      const ids = new Set([id, ...busChannels(current, id).map((signal) => signal.id)]);
       return { ...current, buses: current.buses?.filter((item) => item.id !== id),
         signals: current.signals.filter((signal) => !ids.has(signal.id)),
         delayLinks: current.delayLinks?.filter((link) => !ids.has(link.sourceSignalId) && !ids.has(link.targetSignalId)),
@@ -961,6 +941,7 @@ function App() {
     const original = busChannels(project, id);
     const copy = { ...source, id: `bus-${crypto.randomUUID()}`, name: `${source.name} copy`, selectedChannels: [...source.selectedChannels] };
     const ids = new Map(original.map((signal) => [signal.id, `data-${crypto.randomUUID()}`]));
+    ids.set(id, copy.id);
     const channels: DataSignal[] = original.map((signal) => ({ ...signal,
       id: ids.get(signal.id)!, busId: copy.id,
       name: signal.name === `${source.name}〈${signal.busIndex}〉` ? `${copy.name}〈${signal.busIndex}〉` : signal.name,
@@ -1107,11 +1088,11 @@ function App() {
   };
 
   const addSelectedConstraint = (sourceSignalId: string) => {
-    if (!selected) return;
+    if (!constraintTarget) return;
     const constraint: TimingConstraint = {
       id: crypto.randomUUID(),
       sourceSignalId,
-      targetSignalId: selected.id,
+      targetSignalId: constraintTarget.id,
       sourceEdge: 1,
       targetEdge: 1,
       sourceEdges: [],
@@ -1121,7 +1102,7 @@ function App() {
         "clock"
           ? "rising"
           : "transition",
-      targetEdgeKind: selected.kind === "clock" ? "rising" : "transition",
+      targetEdgeKind: constraintTarget.kind === "clock" ? "rising" : "transition",
       setupPs: project.constraintDraft.setupPs,
       holdPs: project.constraintDraft.holdPs,
     };
@@ -1583,7 +1564,7 @@ function App() {
       const targetLayout = trackLayoutBySignal.get(constraint.targetSignalId);
       if (!targetLayout) return null;
       return (
-        <g key={constraint.id}>
+        <g key={constraint.id + ":" + constraint.targetSignalId}>
           {resolved.windows.map((window, windowIndex) => {
             const referenceX = timelineX(window.sourceTimePs);
             const startX = timelineX(window.startTimePs);
@@ -1592,18 +1573,18 @@ function App() {
               <g
                 key={`${constraint.id}-${windowIndex}`}
                 className={`linked-timing-window${
-                  window.isViolated ? " is-violated" : ""
+                  window.isViolated ? " is-violated" : window.isMixed ? " is-mixed" : ""
                 }`}
                 aria-label={
                   window.isViolated
                     ? "Constrained edge is inside the timing window"
-                    : "Timing constraint window"
+                    : window.isMixed ? "Sampling inside the Bus mixed-data interval" : "Timing constraint window"
                 }
               >
                 <rect
                   x={Math.min(startX, endX)}
                   y={targetLayout.y + 4}
-                  width={Math.abs(endX - startX)}
+                  width={Math.max(window.isMixed ? 2 : 0, Math.abs(endX - startX))}
                   height={Math.max(1, targetLayout.height - 8)}
                   rx="4"
                 />
@@ -1665,7 +1646,7 @@ function App() {
   };
 
   const timingDraft = delayDraft ?? constraintDraft;
-  const draftTarget = project.signals.find((signal) => signal.id === timingDraft?.targetSignalId);
+  const draftTarget = project.signals.find((signal) => signal.id === timingDraft?.targetSignalId) ?? managerSignals.find(signal => signal.id === constraintDraft?.targetSignalId);
   const closeCreation = () => {
     setSignalDraft(null);
     setBusDraft(null);
@@ -1736,7 +1717,7 @@ function App() {
           onAddDelay={() => {}} onAddConstraint={() => {}} onChangeDelay={() => {}}
           onChangeConstraint={() => {}} onRemoveDelay={() => {}} onRemoveConstraint={() => {}} />}
         {timingDraft && draftTarget && <SignalTimingEditor creation={delayDraft ? "delay" : "constraint"}
-          selected={draftTarget} signals={project.signals} durationPs={project.durationPs}
+          busTarget={busById.has(draftTarget.id)} selected={draftTarget} signals={project.signals.filter(signal => signal.kind !== "data" || signal.busId !== draftTarget.id)} durationPs={project.durationPs}
           edgeTimes={(signal, polarity) => resolvedProjectTiming.edgeTimes(signal.id, polarity)}
           delayLink={delayDraft ?? undefined} constraint={constraintDraft ?? undefined}
           onChangeDelay={(patch) => setDelayDraft((draft) => draft ? { ...draft, ...patch } : draft)}
@@ -2475,36 +2456,60 @@ function App() {
                   })}
                 </g>
 
-                {renderConstraintWindows()}
                 {renderDelayBackgrounds()}
                 {renderSequentialGuides()}
 
                 {trackLayouts.map(({ height, signal, y }) => {
                   const bus = busById.get(signal.id);
                   if (bus) {
-                    const segments = buildBusSummarySegments(
-                      busChannels(project, bus.id), project.durationPs, resolvedDelayLinks.signalShiftsPs,
-                    );
+                    const channels = busChannels(project, bus.id);
+                    const shifts = resolvedDelayLinks.signalShiftsPs;
+                    const windows = busMixedWindows(channels, project.durationPs, shifts, bus.earlyPs ?? 0, bus.latePs ?? 0);
+                    let windowIndex = 0;
+                    const stable = buildBusSummarySegments(channels, project.durationPs, shifts).flatMap(segment => {
+                      let cursor = segment.startPs;
+                      const parts = [];
+                      while (windows[windowIndex]?.endPs <= cursor) windowIndex++;
+                      for (let i = windowIndex; i < windows.length && windows[i].startPs < segment.endPs; i++) {
+                        if (windows[i].startPs > cursor) parts.push({ ...segment, startPs: cursor, endPs: windows[i].startPs });
+                        cursor = Math.max(cursor, windows[i].endPs);
+                      }
+                      if (cursor < segment.endPs) parts.push({ ...segment, startPs: cursor });
+                      return parts;
+                    });
+                    const center = y + height / 2;
+                    const railHeight = Math.max(11, height * 0.24);
+                    const top = center - railHeight;
+                    const bottom = center + railHeight;
+                    const outline = (left: number, right: number) => {
+                      const notch = Math.min(7, (right - left) / 4);
+                      return `M ${left} ${center} L ${left + notch} ${top} H ${right - notch} L ${right} ${center} L ${right - notch} ${bottom} H ${left + notch} Z`;
+                    };
+                    const hatchId = `bus-hatch-${bus.id}`;
                     return <g key={bus.id} className="wave-row bus-wave-row">
                       <rect className="row-hitbox" x="0" y={y} width="100%" height={height} />
                       <line className="row-divider" x1="0" x2="100%" y1={y + height - 1} y2={y + height - 1} />
-                      {segments.map((segment, index) => {
-                        const x = timelineX(segment.startPs);
-                        const width = Math.max(0, timelineX(segment.endPs) - x);
-                        const left = x + 0.5;
-                        const right = x + width - 0.5;
-                        const center = y + height / 2;
-                        const top = center - Math.max(11, height * 0.24);
-                        const bottom = center + Math.max(11, height * 0.24);
-                        const notch = Math.min(8, width / 4);
-                        const label = fitBusSlotLabel(segment.tokens, width - 28, measureBusSummaryText);
-                        const clipId = `bus-summary-clip-${bus.id}-${index}`;
+                      <defs><pattern id={hatchId} width="7" height="7" patternUnits="userSpaceOnUse">
+                        <path d="M-1 1 L1 -1 M0 7 L7 0 M6 8 L8 6" className="bus-hatch-line" />
+                      </pattern></defs>
+                      {stable.map((segment, index) => {
+                        const left = timelineX(segment.startPs);
+                        const right = timelineX(segment.endPs);
+                        const label = fitBusSlotLabel(segment.tokens, right - left - 18, measureBusSummaryText);
                         return <g key={index}>
                           <title>{segment.detail}</title>
-                          <defs><clipPath id={clipId}><rect x={x + 12} y={y} width={Math.max(0, width - 24)} height={height} /></clipPath></defs>
-                          <path className="bus-summary-shape" d={`M ${left} ${center} L ${left + notch} ${top} L ${right - notch} ${top} L ${right} ${center} L ${right - notch} ${bottom} L ${left + notch} ${bottom} Z`} />
-                          {width > 30 && <path className="bus-summary-rails" d={`M ${left + notch + 3} ${top + 4} H ${right - notch - 3} M ${left + notch + 3} ${bottom - 4} H ${right - notch - 3}`} />}
-                          {label && <text className="bus-summary-label" x={x + 14} y={center + 3.5} clipPath={`url(#${clipId})`}>{label}</text>}
+                          <path className="bus-summary-shape" d={outline(left, right)} />
+                          {label && <text className="bus-summary-label" textAnchor="middle" x={(left + right) / 2} y={center + 3.5}>{label}</text>}
+                        </g>;
+                      })}
+                      {windows.map(window => {
+                        const left = timelineX(window.startPs);
+                        const right = timelineX(window.endPs);
+                        const shape = outline(left, right);
+                        return <g key={window.startPs}>
+                          <title>{window.possible ? "Possible mixed data" : "Mixed data"} · {window.startPs}–{window.endPs} ps</title>
+                          <path className="bus-mixed-base" d={shape} />
+                          <path className="bus-mixed-window" fill={`url(#${hatchId})`} d={shape} />
                         </g>;
                       })}
                     </g>;
@@ -2796,6 +2801,7 @@ function App() {
                     </g>
                   );
                 })}
+                {renderConstraintWindows()}
                 {renderDelayLinks()}
               </svg>
             </div>
@@ -2849,7 +2855,14 @@ function App() {
           onChange={(patch) => updateBus(selectedBus.id, patch)}
           onResize={(width) => resizeSelectedBus(selectedBus.id, width)}
           onApplyPatterns={(patterns, indexes, replaceOverrides, generated) => applyPatternsToBus(selectedBus.id, patterns, indexes, replaceOverrides, generated)}
-        /></div></aside>}
+        />
+          {constraintTarget && <SignalTimingEditor busTarget selected={constraintTarget} signals={project.signals.filter(signal => signal.kind !== "data" || signal.busId !== selectedBus.id)}
+            durationPs={project.durationPs} constraint={selectedConstraint}
+            edgeTimes={(signal, polarity) => resolvedProjectTiming.edgeTimes(signal.id, polarity)}
+            onAddConstraint={addSelectedConstraint} onChangeConstraint={updateSelectedConstraint}
+            onRemoveConstraint={() => setProject(current => ({ ...current, timingConstraints: current.timingConstraints?.filter(item => item.id !== selectedConstraint?.id) }))}
+            onAddDelay={() => {}} onChangeDelay={() => {}} onRemoveDelay={() => {}} />}
+        </div></aside>}
         {inspectorOpen && !selectedBus && <PropertyPanel
           onCollapse={() => setInspectorOpen(false)}
           project={project}

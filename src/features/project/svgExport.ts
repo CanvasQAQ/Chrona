@@ -223,6 +223,16 @@ export function buildStandaloneSvg(
   clonedCanvas
     .querySelectorAll<SVGElement>(".bus-summary-rails")
     .forEach((element) => element.style.setProperty("stroke", darkExport ? "#766aab" : "#b9a4e2"));
+  clonedCanvas.querySelectorAll<SVGPathElement>(".bus-mixed-base").forEach(path => {
+    path.style.fill = darkExport ? "#303039" : "#f0f0f2";
+    path.style.stroke = secondaryTextColor;
+  });
+  clonedCanvas.querySelectorAll<SVGPathElement>(".bus-mixed-window").forEach(window => {
+    // Keep hatch references local when the exported SVG is opened as a separate file.
+    window.style.fill = window.getAttribute("fill") ?? "none";
+    window.style.stroke = "none";
+  });
+  clonedCanvas.querySelectorAll<SVGElement>(".bus-hatch-line").forEach(line => { line.style.stroke = secondaryTextColor; });
   clonedCanvas
     .querySelectorAll<SVGElement>(".bus-summary-label")
     .forEach((element) => element.style.setProperty("fill", darkExport ? "#d8cff2" : "#5f478e"));

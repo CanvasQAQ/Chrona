@@ -1,4 +1,5 @@
-import { ActionIcon, Badge, Button, Slider, TextInput } from "@mantine/core";
+import { ActionIcon, Badge, Button, Checkbox, Slider, TextInput } from "@mantine/core";
+import { LiveNumberInput as NumberInput } from "../../components/LiveNumberInput";
 import { PanelRightClose } from "lucide-react";
 import { ConvertibleTimeInput } from "../../components/ConvertibleTimeInput";
 import { DataPatternEditor } from "../../components/DataPatternEditor";
@@ -123,6 +124,14 @@ export function PropertyPanel({
               />
               {parentBus && selected.kind === "data" && <div className="bus-inheritance">Interval: {selected.busOverrides?.periodPs ? "Local override" : "Bus default"}{selected.busOverrides?.periodPs && <Button size="compact-xs" variant="subtle" onClick={() => onRestoreBusParameter?.("periodPs")}>Restore bus default</Button>}</div>}
 
+              {parentBus && selected.kind === "data" && <div className="compound-field">
+                <Checkbox label="Use fixed channel skew" checked={selected.busOffsetPs !== undefined} onChange={event => onUpdateSelected({ busOffsetPs: event.currentTarget.checked ? 0 : undefined })} />
+                {selected.busOffsetPs === undefined
+                  ? <small>Bus range: −{parentBus.earlyPs ?? 0} to +{parentBus.latePs ?? 0} ps</small>
+                  : <NumberInput label="Channel offset" description="Negative moves earlier; positive moves later."
+                      suffix=" ps" value={selected.busOffsetPs}
+                      onChange={busOffsetPs => onUpdateSelected({ busOffsetPs })} />}
+              </div>}
               {selected.kind === "clock" && (
                 <>
                   <ConvertibleTimeInput

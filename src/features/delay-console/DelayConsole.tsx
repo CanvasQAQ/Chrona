@@ -1,7 +1,6 @@
 import {
   ActionIcon,
   Badge,
-  NumberInput,
   SegmentedControl,
   Select,
   Slider,
@@ -9,6 +8,7 @@ import {
   Tooltip,
   UnstyledButton,
 } from "@mantine/core";
+import { LiveNumberInput as NumberInput } from "../../components/LiveNumberInput";
 import {
   ArrowRight,
   ChevronDown,

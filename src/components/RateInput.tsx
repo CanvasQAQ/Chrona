@@ -1,4 +1,5 @@
-import { NumberInput, SegmentedControl, Select } from "@mantine/core";
+import { SegmentedControl, Select } from "@mantine/core";
+import { LiveNumberInput as NumberInput } from "./LiveNumberInput";
 import { useId, useState } from "react";
 import {
   displayValueToPeriodPs,

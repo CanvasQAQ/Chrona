@@ -1,3 +1,5 @@
+import { busMixedWindows } from "./bus";
+
 export type SignalKind = "clock" | "data";
 export type EdgePolarity = "rising" | "falling" | "both" | "transition";
 
@@ -57,6 +59,8 @@ export interface DataSignal extends SignalBase {
   derivation?: SequentialDerivation;
   busId?: string;
   busIndex?: number;
+  /** Fixed offset replaces the inherited Bus uncertainty range. */
+  busOffsetPs?: number;
   busOverrides?: { pattern?: boolean; startPs?: boolean; periodPs?: boolean };
 }
 
@@ -76,6 +80,8 @@ export interface Bus {
   groupId?: string;
   startPs: number;
   periodPs: number;
+  earlyPs?: number;
+  latePs?: number;
   rule: BusRule;
   displayMode: "collapsed" | "selected" | "all";
   /** Mode restored by the title disclosure after a temporary fold. */
@@ -225,6 +231,7 @@ export interface ResolvedConstraintWindow {
   startTimePs: number;
   endTimePs: number;
   isViolated: boolean;
+  isMixed?: boolean;
   violatingTargetTimesPs: number[];
 }
 
@@ -808,6 +815,35 @@ export function resolveTimingConstraint(
       };
     }),
   };
+}
+
+/** A Bus owns one rule; each channel supplies its own resolved edges. */
+export function resolveConstraintRows(
+  project: TimingProject, constraint: TimingConstraint,
+  edgeTimes: (signal: Signal, polarity: EdgePolarity) => number[],
+  shifts: Record<string, number> = {},
+) {
+  const bus = project.buses?.find(item => item.id === constraint.targetSignalId);
+  const targets = bus ? project.signals.filter(signal => signal.kind === "data" && signal.busId === bus.id)
+    : project.signals.filter(signal => signal.id === constraint.targetSignalId);
+  const rows = targets.flatMap(target => {
+    const laneRule = { ...constraint, targetSignalId: target.id };
+    const resolved = resolveTimingConstraint(project.signals, project.durationPs, laneRule, {}, edgeTimes);
+    return resolved ? [{ constraint: laneRule, resolved }] : [];
+  });
+  if (bus && rows.length) {
+    const mixed = busMixedWindows(targets.filter((signal): signal is DataSignal => signal.kind === "data"),
+      project.durationPs, shifts, bus.earlyPs ?? 0, bus.latePs ?? 0);
+    const windows = rows[0].resolved.windows.map((window, index) => {
+      const violations = rows.flatMap(row => row.resolved.windows[index].violatingTargetTimesPs);
+      return { ...window, isViolated: violations.length > 0, violatingTargetTimesPs: violations,
+        isMixed: violations.length === 0 && mixed.some(interval =>
+          window.sourceTimePs >= interval.startPs && window.sourceTimePs < interval.endPs),
+      };
+    });
+    rows.push({ constraint, resolved: { windows, targetTimesPs: rows.flatMap(row => row.resolved.targetTimesPs) } });
+  }
+  return rows;
 }
 
 export function clockWavePoints(

@@ -1,7 +1,6 @@
 import {
   ActionIcon,
   Button,
-  NumberInput,
   Popover,
   SegmentedControl,
   Tooltip,
@@ -9,6 +8,7 @@ import {
   useComputedColorScheme,
   useMantineColorScheme,
 } from "@mantine/core";
+import { LiveNumberInput as NumberInput } from "../../components/LiveNumberInput";
 import {
   Copy,
   Download,

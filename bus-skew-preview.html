@@ -1,0 +1,16 @@
+<meta charset="utf-8"><title>Chrona · Bus skew</title>
+<style>*{box-sizing:border-box}body{margin:0}iframe{width:100%;height:100vh;border:0;display:block}</style>
+<iframe src="/" title="Chrona"></iframe>
+<script type="module">
+const frame=document.querySelector('iframe');
+const data=await (await fetch('/examples/bus-skew.chrona.json')).blob();
+const timer=setInterval(()=>{
+ const input=frame.contentDocument?.querySelector('input[type=file]');
+ if(!input)return;
+ clearInterval(timer);
+ const transfer=new DataTransfer();
+ transfer.items.add(new File([data],'bus-skew.chrona.json',{type:'application/json'}));
+ input.files=transfer.files;
+ input.dispatchEvent(new Event('change',{bubbles:true}));
+},100);
+</script>

@@ -1,4 +1,5 @@
-import { NumberInput, Slider } from "@mantine/core";
+import { Slider } from "@mantine/core";
+import { LiveNumberInput as NumberInput } from "./LiveNumberInput";
 import type { DelayRange } from "../domain/timing";
 
 interface DelayRangeEditorProps {

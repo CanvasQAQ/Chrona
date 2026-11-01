@@ -127,7 +127,7 @@ function validateProject(project: TimingProject) {
     targets.add(link.targetSignalId);
     requireValue(link.minPs <= link.currentPs && link.currentPs <= link.maxPs, "Expected delay min <= current <= max");
   }
-  for (const c of project.timingConstraints ?? []) requireValue(byId.has(c.sourceSignalId) && byId.has(c.targetSignalId), "Constraint references a missing signal; remove dependent relations in the same batch");
+  for (const c of project.timingConstraints ?? []) requireValue(byId.has(c.sourceSignalId) && (byId.has(c.targetSignalId) || project.buses?.some(bus => bus.id === c.targetSignalId)), "Constraint references a missing signal; remove dependent relations in the same batch");
   // Inspect the dependency graph independently, including dependencies without resolvable edges.
   const visiting = new Set<string>();
   const visited = new Set<string>();

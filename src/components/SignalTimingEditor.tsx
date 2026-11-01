@@ -1,11 +1,11 @@
 import {
   Button,
   MultiSelect,
-  NumberInput,
   Select,
   Slider,
   TextInput,
 } from "@mantine/core";
+import { LiveNumberInput as NumberInput } from "./LiveNumberInput";
 import { Link2, ShieldAlert, Trash2 } from "lucide-react";
 import {
   signalEdges,
@@ -18,6 +18,7 @@ import {
 
 interface SignalTimingEditorProps {
   creation?: "delay" | "constraint";
+  busTarget?: boolean;
   constraint?: TimingConstraint;
   delayLink?: EdgeDelayLink;
   durationPs: number;
@@ -90,6 +91,7 @@ function edgeOptions(
 
 export function SignalTimingEditor({
   creation,
+  busTarget,
   constraint,
   delayLink,
   durationPs,
@@ -136,7 +138,7 @@ export function SignalTimingEditor({
     }
 
     const minimum = Math.max(0, Math.min(delayLink.minPs, delayLink.maxPs));
-    const maximum = Math.max(minimum + 1, Math.max(delayLink.minPs, delayLink.maxPs));
+    const maximum = Math.max(minimum, delayLink.maxPs);
     const current = Math.min(maximum, Math.max(minimum, delayLink.currentPs));
     const sourceEdgeCount = edgeCount(delaySource, durationPs, edgeTimes);
     const targetEdgeCount = edgeCount(selected, durationPs, edgeTimes);
@@ -199,41 +201,22 @@ export function SignalTimingEditor({
           />
         </div>
         <div className="timing-field-pair timing-delay-bounds">
-          <NumberInput
-            label="Minimum"
-            suffix=" ps"
-            min={0}
-            value={delayLink.minPs}
-            onChange={(value) => {
-              const minPs = Math.max(0, numericValue(value, 0));
-              onChangeDelay({
-                minPs,
-                currentPs: Math.max(minPs, delayLink.currentPs),
-                maxPs: Math.max(minPs, delayLink.maxPs),
-              });
-            }}
-          />
-          <NumberInput
-            label="Maximum"
-            suffix=" ps"
-            min={0}
-            value={delayLink.maxPs}
-            onChange={(value) => {
-              const maxPs = Math.max(0, numericValue(value, delayLink.maxPs));
-              onChangeDelay({
-                maxPs,
-                minPs: Math.min(delayLink.minPs, maxPs),
-                currentPs: Math.min(maxPs, delayLink.currentPs),
-              });
-            }}
-          />
+          <NumberInput label="Minimum" suffix=" ps" min={0} allowNegative={false} value={delayLink.minPs} onChange={value => {
+            const minPs = Math.min(value, delayLink.maxPs);
+            onChangeDelay({ minPs, currentPs: Math.max(minPs, delayLink.currentPs) });
+          }} />
+          <NumberInput label="Maximum" suffix=" ps" min={0} allowNegative={false} value={delayLink.maxPs} onChange={value => {
+            const maxPs = Math.max(value, delayLink.minPs);
+            onChangeDelay({ maxPs, currentPs: Math.min(maxPs, delayLink.currentPs) });
+          }} />
         </div>
         <Slider
           aria-label="Current source delay"
           min={minimum}
-          max={maximum}
+          max={maximum === minimum ? minimum + 1 : maximum}
           step={Math.max(1, Math.round((maximum - minimum) / 100))}
           value={current}
+          disabled={delayLink.minPs === delayLink.maxPs}
           label={(value) => `${Math.round(value)} ps`}
           onChange={(currentPs) => onChangeDelay({ currentPs })}
         />
@@ -352,7 +335,7 @@ export function SignalTimingEditor({
                 })
               }
             />
-            <MultiSelect
+            {busTarget ? <small>All matching edges on every Bus channel</small> : <MultiSelect
               aria-label="Constrained edge numbers"
               data={edgeOptions(selected, durationPs, targetEdgeKind, edgeTimes)}
               value={targetValues}
@@ -364,7 +347,7 @@ export function SignalTimingEditor({
               onChange={(values) =>
                 onChangeConstraint({ targetEdges: values.map(Number) })
               }
-            />
+            />}
           </div>
         </div>
         <div className="timing-field-pair">
@@ -407,7 +390,7 @@ export function SignalTimingEditor({
 
   return (
     <div className="signal-timing-editor">
-      {creation !== "constraint" && <div className="signal-timing-block">
+      {!busTarget && creation !== "constraint" && <div className="signal-timing-block">
         <div className="signal-timing-title">Source delay</div>
         {renderDelay()}
       </div>}

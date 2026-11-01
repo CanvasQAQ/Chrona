@@ -1,4 +1,5 @@
-import { NumberInput, SegmentedControl } from "@mantine/core";
+import { SegmentedControl } from "@mantine/core";
+import { LiveNumberInput as NumberInput } from "./LiveNumberInput";
 import { useId, useState } from "react";
 import { degreesToPs, psToDegrees } from "../domain/timing";
 

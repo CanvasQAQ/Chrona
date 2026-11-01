@@ -446,6 +446,13 @@ export function resolveProjectTiming(
       }
     }
 
+    if (signal.kind === "data" && signal.busId && signal.busOffsetPs && final.data) {
+      const shift = (signalShiftsPs[signalId] ?? 0) + signal.busOffsetPs;
+      signalShiftsPs[signalId] = shift;
+      final = { data: signal.sourceType === "sequential"
+        ? shiftWaveform(final.data, signal.busOffsetPs)
+        : patternWaveform({ ...signal, startPs: signal.startPs + shift }, durationPs) };
+    }
     resolved.set(signalId, final);
     visiting.delete(signalId);
     if (final.clock) clockBySignalId[signalId] = final.clock;

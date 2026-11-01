@@ -1,4 +1,5 @@
-import { Button, Checkbox, Modal, NumberInput, SegmentedControl, Select, Textarea, TextInput } from "@mantine/core";
+import { Button, Checkbox, Modal, SegmentedControl, Select, Textarea, TextInput } from "@mantine/core";
+import { LiveNumberInput as NumberInput } from "./LiveNumberInput";
 import { Maximize2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ConvertibleTimeInput } from "./ConvertibleTimeInput";
@@ -80,8 +81,12 @@ export function BusEditor({ bus, channels, creation, referencePeriodPs, onChange
       {!creation && draftWidth !== bus.width && <Button size="xs" variant="light" disabled={!Number.isInteger(draftWidth) || draftWidth < 1 || draftWidth > 256} onClick={() => onResize(draftWidth)}>Apply width</Button>}
       <ConvertibleTimeInput label="Start default" valuePs={bus.startPs} referencePeriodPs={referencePeriodPs} onChange={(startPs) => onChange({ startPs })} />
       <RateInput periodPs={bus.periodPs} onChange={(periodPs) => onChange({ periodPs })} />
+      <div className="bus-rule-grid">
+        {(["earlyPs", "latePs"] as const).map(key => <NumberInput key={key} label={key === "earlyPs" ? "Maximum advance" : "Maximum delay"} suffix=" ps" min={0} allowNegative={false} value={bus[key] ?? 0} onChange={value => onChange({ [key]: Math.max(0, Number(value) || 0) })} />)}
+      </div>
+      <p className="bus-hint">Hatching marks the possible mixed-data interval. Select a channel to set a fixed offset.</p>
       <p className="bus-hint">Each channel has a finite Pattern. After its last item, the Pattern repeats until the project ends, as with Data signals. No Clock binding is required.</p>
-      {!creation && <p className="bus-hint">{channels.filter((channel) => Object.values(channel.busOverrides ?? {}).some(Boolean)).length} channels have local overrides.</p>}
+      {!creation && <p className="bus-hint">{channels.filter((channel) => channel.busOffsetPs !== undefined || Object.values(channel.busOverrides ?? {}).some(Boolean)).length} channels have local overrides.</p>}
     </section>
     {!creation && <section className="property-section">
       <div className="section-title"><span>Display</span><span className="section-index">02</span></div>
