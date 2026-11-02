@@ -2,7 +2,7 @@
 
 Chrona 是一款面向硬件设计、验证和系统工程师的可交互 Timing Diagram 编辑器。
 
-当前版本：v0.3.1。
+当前版本：v0.3.2。
 
 ## 当前能力
 
@@ -65,7 +65,7 @@ npm run build
 GitHub Actions 会在提交到 `main`、向 `main` 提交 Pull Request，或手动触发工作流时，
 自动构建以下安装包，并保留为工作流产物：
 
-- Windows x64（NSIS `.exe`）
+- Windows x64（安装版与免安装版各一个 `.zip`；解压后分别运行安装程序或便携版程序）
 - Linux x64（`.AppImage` 和 `.deb`）
 - macOS Intel 与 Apple Silicon（`.dmg`）
 

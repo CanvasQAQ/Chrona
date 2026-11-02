@@ -50,9 +50,9 @@ jobs:
         include:
           - label: Windows x64
             os: windows-latest
-            builder_args: --win nsis --x64
+            builder_args: --win nsis portable --x64
             artifact_name: chrona-windows-x64
-            artifact_path: release/*.exe
+            artifact_path: release/Chrona-*-windows-x64-*.zip
           - label: Linux x64
             os: ubuntu-latest
             builder_args: --linux AppImage deb --x64
@@ -87,6 +87,23 @@ jobs:
       - name: Build installer
         run: npx electron-builder ${{ matrix.builder_args }} --publish never
 
+      - name: Wrap Windows editions in ZIP
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          foreach ($edition in @('setup', 'portable')) {
+            $exe = "release/Chrona-$version-$edition.exe"
+            if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
+              throw "Missing Windows $edition build: $exe"
+            }
+            $zip = "release/Chrona-$version-windows-x64-$edition.zip"
+            Compress-Archive -LiteralPath $exe -DestinationPath $zip -CompressionLevel NoCompression
+            if (-not (Test-Path -LiteralPath $zip -PathType Leaf)) {
+              throw "Failed to create $zip"
+            }
+          }
+
       - name: Upload installer
         uses: actions/upload-artifact@v7
         with:
@@ -113,6 +130,10 @@ jobs:
           GH_REPO: ${{ github.repository }}
         shell: bash
         run: |
+          if find release-assets -type f -name '*.exe' | grep -q .; then
+            echo 'Windows executables must be wrapped in ZIP files' >&2
+            exit 1
+          fi
           mapfile -d '' files < <(find release-assets -type f -print0)
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber

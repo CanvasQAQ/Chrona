@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.3.2 — 2026-11-02
+
+### Changed
+
+- Windows x64 同时提供 NSIS 安装版和 portable 免安装版，两种可执行文件分别封装为 ZIP
+- Windows 工作流产物与 GitHub Release 只上传 ZIP，不直接提供 `.exe` 文件
+
+### Validation
+
+- 生产构建、全量测试和发布工作流配置检查通过
+
 ## v0.3.1 — 2026-11-01
 
 ### Added
