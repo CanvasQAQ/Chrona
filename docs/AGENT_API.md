@@ -45,7 +45,7 @@ MCP 由官方 `@modelcontextprotocol/sdk` 提供，使用无协议会话的 Stre
 
 - `signalIds: ["clk", "d"]`：返回指定信号的完整定义。
 - `includeProject: true`：返回完整 `project`，沿用 `.chrona.json` 数据模型。
-- `waveform: { startPs: 0, endPs: 3000 }`：返回选中信号在范围内经 Delay/Sequential 解析后的 points/events，以及范围起点的值。默认选中全部信号，建议同时指定 signalIds。
+- `waveform: { startPs: 0, endPs: 3000 }`：返回选中信号在范围内经 Delay/Sequential 解析后的 points/events，以及范围起点的值。DFF 在输入 Bus 混合区采样时，波形仍返回按当前边沿计算的值，并附 `uncertainSamples`（采样时间和输出时间）。默认选中全部信号，建议同时指定 signalIds。
 - `sessionId`：可选，要求读取特定编辑会话；不匹配时返回错误。
 
 所有时间均为 ps。周期至少 1 ps，Clock dutyCycle 为 0.05–0.95 的比例值。Waveform 范围必须在工程时长内，起点小于终点。
@@ -88,16 +88,33 @@ MCP 由官方 `@modelcontextprotocol/sdk` 提供，使用无协议会话的 Stre
 | 操作 | 参数与语义 |
 | --- | --- |
 | `create_signal` | `signal`：`kind` 为 clock/data/derived；后者必须提供 derivation，保存为 sequential Data |
-| `update_signal` | `id, patch`：修改允许的字段，不能改变 kind；修改 Bus 通道的 pattern/start/period 会设置局部 override |
+| `update_signal` | `id, patch`：修改允许的字段，不能改变 kind；修改 Bus 通道的 pattern/start/period 会设置局部 override；`busOffsetPs` 设置固定偏移，`null` 恢复继承 |
 | `delete_signal` | `id`：删除独立信号；同批次需移除或改接依赖 |
-| `create_bus` | `bus`：id/name/width/periodPs，startPs 和生成 rule 可选；自动创建通道 |
-| `update_bus` | `id, patch`：修改默认参数、显示模式、精选通道；保留通道局部 override |
+| `create_bus` | `bus`：id/name/periodPs；普通名称需要 width，`data<10:4>` 可推导 width=7；可设置 startPs、rule、earlyPs、latePs、channelFirst、channelStep；自动创建通道 |
+| `create_derived_bus` | `bus`：id/name/sourceBusId/clockSignalId/device/trigger/c2q/initialValue，Latch 还需 d2q；原子创建与输入同宽、按内部序号对应的输出 Bus |
+| `update_bus` | `id, patch`：修改默认参数、earlyPs/latePs、编号、显示模式和精选通道；保留局部 override |
+| `resize_bus` | `id, width`：扩缩容，保留存留通道 ID；缩窄会删除被删通道的 Delay/约束，其他派生引用需同批处理 |
+| `apply_bus_patterns` | `id, channelIndexes, patterns, replaceOverrides?`：逐路批量设置 Pattern；默认跳过已有局部 Pattern override |
+| `restore_bus_parameter` | 通道 `id` 与 `parameter`（pattern/startPs/periodPs）：恢复继承 Bus 默认值 |
 | `delete_bus` | `id`：删除 Bus 与其通道，同批次需处理外部依赖 |
 | `put_delay` | `delay`：按 ID 创建或替换完整关系；每个目标只允许一个 source delay |
 | `delete_delay` | `id` |
 | `put_constraint` | `constraint`：按 ID 创建或替换完整 Setup/Hold 约束 |
 | `delete_constraint` | `id` |
 | `update_project` | `patch`：name/durationPs |
+
+Bus 的 `channelIndexes` 和 `selectedChannels` 始终使用从 0 开始的内部序号；`data<10:4>` 的显示编号则为 10、9、…、4。新建时若同时给 `width`，须与名称区间一致。修改已有 Bus 的名称区间时须先把 Bus 调整到相同宽度。`earlyPs`/`latePs` 是非负的不确定性范围；固定 `busOffsetPs` 可为负，且取代该通道继承的范围。MCP 读取工程及波形时使用相同的计算结果；X 纹理、调色板与混合区虚线由画布自动绘制。
+
+示例：
+
+```json
+{"sessionId":"FROM_READ","expectedRevision":0,"requestId":"bus-example-1","operations":[
+  {"type":"create_bus","bus":{"id":"data_bus","name":"data<10:4>","periodPs":1000,"earlyPs":140,"latePs":180}},
+  {"type":"update_bus","id":"data_bus","patch":{"displayMode":"selected","selectedChannels":[0,6]}}
+]}
+```
+
+创建后先用 `chrona_read` 获取新通道 ID，再用 `update_signal` 设置单路固定偏移或用 `apply_bus_patterns` 批量设置数据。派生 Bus 示例：`{"type":"create_derived_bus","bus":{"id":"q_bus","name":"Q","sourceBusId":"data_bus","clockSignalId":"clk","device":"dff","trigger":"rising","c2q":{"minPs":0,"currentPs":10,"maxPs":20},"initialValue":"X"}}`。
 
 Delay 边沿编号从 1 开始，延迟范围满足 `0 <= minPs <= currentPs <= maxPs`。DFF 使用 rising/falling，Latch 使用 high/low 且必须提供 d2q。派生 Q 必须编辑 derivation 或输入源，禁止直接设置 pattern。共享依赖图检测循环和缺失源。
 
@@ -120,7 +137,7 @@ Delay 边沿编号从 1 开始，延迟范围满足 `0 <= minPs <= currentPs <= 
 
 HTTP 请求限制为 1 MiB，同时最多 32 个请求。主进程等待 Renderer 15 秒，过期请求不再执行；不确定的超时结果应沿用 requestId 重试。
 
-尚未暴露 Bus 扩缩容、分组、图片预览、文件读写、自动保存和导出。Chrona 用于调试示意，不替代 STA。
+尚未暴露分组、图片预览、文件读写、自动保存和导出。多路 Derived Data 可用 `create_derived_bus` 一次创建；输出 Bus 宽度与 Pattern 不能直接改动，派生通道仍可逐路编辑。DFF 在输入 Bus 混合区内采样时保留按当前边沿计算的值，并附黄色提示；直接 Setup/Hold 违例仍为红色且不叠加黄色提示；Latch 的透明窗口仍按现有单路模型计算。Chrona 用于调试示意，不替代 STA。
 
 ## 实现与验证
 

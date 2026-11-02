@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyBusPatterns, busChannels, busSlotLabel, createBus, createBusChannels, fitBusSlotLabel, generateBusPattern, parseBusSelection, parseBusTable, resizeBus, updateBusDefaults } from "./bus";
+import { applyBusPatterns, busChannels, busSlotLabel, createBus, createBusChannels, fitBusSlotLabel, formatBusName, generateBusPattern, parseBusName, parseBusSelection, parseBusTable, resizeBus, updateBusDefaults } from "./bus";
 import { resolveConstraintRows, type TimingProject } from "./timing";
 import { resolveProjectTiming } from "./sequential";
 import { buildBusSummarySegments, busMixedWindows } from "../features/canvas/canvasGeometry";
@@ -11,6 +11,30 @@ const projectWithBus = (): TimingProject => {
 };
 
 describe("Bus data", () => {
+  it("creates named channel ranges while keeping ordinal storage indexes", () => {
+    expect(parseBusName("data<10:4>")).toMatchObject({ name: "data", width: 7, channelFirst: 10, channelStep: -1 });
+    const bus = createBus("data<10:4>");
+    expect(formatBusName(bus)).toBe("data<10:4>");
+    const channels = createBusChannels(bus, "#123456");
+    expect(channels.map(channel => [channel.name, channel.busIndex])).toEqual([
+      ["data〈10〉", 0], ["data〈9〉", 1], ["data〈8〉", 2], ["data〈7〉", 3],
+      ["data〈6〉", 4], ["data〈5〉", 5], ["data〈4〉", 6],
+    ]);
+    const renamed = updateBusDefaults({ ...projectWithBus(), buses: [bus], signals: channels }, bus.id, { name: "payload" });
+    expect(busChannels(renamed, bus.id)[0].name).toBe("payload〈10〉");
+    const renumbered = updateBusDefaults(renamed, bus.id, { channelFirst: 20, channelStep: -1 });
+    expect(formatBusName(renumbered.buses![0])).toBe("payload<20:14>");
+    expect(busChannels(renumbered, bus.id).map(channel => channel.name)).toEqual([
+      "payload〈20〉", "payload〈19〉", "payload〈18〉", "payload〈17〉",
+      "payload〈16〉", "payload〈15〉", "payload〈14〉",
+    ]);
+  });
+
+  it("distinguishes unknown Bus data from ordinary labels", () => {
+    expect(busSlotLabel(["X", "X"])).toBe("X");
+    expect(busSlotLabel(["X", "D1"])).toBe("X · 1/2 channels");
+    expect(fitBusSlotLabel(["X", "D1"], 100, value => value.length * 6)).toBe("X · 1/2 channels");
+  });
   it("generates channel and time steps as abstract item labels", () => {
     const project = projectWithBus();
     expect(busChannels(project, project.buses![0].id)[0].pattern).toEqual(["D0", "D40", "D80"]);

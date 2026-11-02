@@ -10,7 +10,10 @@ import {
   type ResolvedEdgeDelay,
   type SequentialDerivation,
   type Signal,
+  type Bus,
 } from "./timing";
+import { busMixedWindows } from "./bus";
+import { derivedBusMixedWindows } from "./derivedBus";
 
 export interface ResolvedDataEvent {
   value: string;
@@ -24,6 +27,8 @@ export interface ResolvedDataEvent {
 export interface ResolvedDataWaveform {
   initialValue: string;
   events: ResolvedDataEvent[];
+  /** Current-value samples made while the source Bus could contain mixed data. */
+  uncertainSamples?: { sampleTimePs: number; outputTimePs: number }[];
   error?: string;
 }
 
@@ -141,11 +146,14 @@ function resolveDff(
   data: ResolvedDataWaveform,
   derivation: SequentialDerivation,
   durationPs: number,
+  isAmbiguousSample: (timePs: number) => boolean = () => false,
 ): ResolvedDataWaveform {
   const initialValue = derivation.initialValue || "X";
   const polarity = derivation.trigger === "falling" ? "falling" : "rising";
   const output: ResolvedDataEvent[] = [];
+  const uncertainSamples: NonNullable<ResolvedDataWaveform["uncertainSamples"]> = [];
   for (const edgeTimePs of signalEdgesByPolarity(clock, durationPs, polarity)) {
+    const ambiguous = isAmbiguousSample(edgeTimePs);
     const event = scheduledEvent(
       "c2q",
       edgeTimePs,
@@ -153,10 +161,11 @@ function resolveDff(
       derivation.c2q,
     );
     if (event.timePs <= durationPs) {
+      if (ambiguous) uncertainSamples.push({ sampleTimePs: edgeTimePs, outputTimePs: event.timePs });
       pushChangedEvent(output, event, initialValue);
     }
   }
-  return { initialValue, events: output };
+  return { initialValue, events: output, ...(uncertainSamples.length ? { uncertainSamples } : {}) };
 }
 
 function clockValueAt(clock: ClockSignal, timePs: number): 0 | 1 {
@@ -271,6 +280,7 @@ function shiftWaveform(
   if (shiftPs === 0) return waveform;
   return {
     ...waveform,
+    uncertainSamples: waveform.uncertainSamples?.map(sample => ({ ...sample, outputTimePs: sample.outputTimePs + shiftPs })),
     events: waveform.events.map((event) => ({
       ...event,
       causeTimePs: event.causeTimePs + shiftPs,
@@ -312,6 +322,7 @@ export function resolveProjectTiming(
   signals: Signal[],
   durationPs: number,
   links: EdgeDelayLink[] = [],
+  buses: Bus[] = [],
 ): ResolvedProjectTiming {
   const bySignalId: Record<string, ResolvedDataWaveform> = {};
   const clockBySignalId: Record<string, ClockSignal> = {};
@@ -382,6 +393,15 @@ export function resolveProjectTiming(
           },
         };
       } else {
+        const sourceSignal = signals.find(item => item.id === signal.derivation!.dataSignalId);
+        const sourceBus = buses.find(bus => bus.id === (sourceSignal?.kind === "data" ? sourceSignal.busId : undefined));
+        const sourceChannels = sourceBus ? signals.filter((item): item is DataSignal => item.kind === "data" && item.busId === sourceBus.id) : [];
+        if (sourceBus) sourceChannels.forEach(channel => { if (channel.id !== signalId) resolveSignal(channel.id); });
+        const mixed = sourceBus
+          ? sourceChannels.length && sourceChannels.every(channel => channel.sourceType === "sequential")
+            ? derivedBusMixedWindows(sourceChannels, bySignalId, durationPs)
+            : busMixedWindows(sourceChannels, durationPs, signalShiftsPs, sourceBus.earlyPs ?? 0, sourceBus.latePs ?? 0)
+          : [];
         base = {
           data:
             signal.derivation.device === "dff"
@@ -390,6 +410,7 @@ export function resolveProjectTiming(
                   dataResolution.data,
                   signal.derivation,
                   durationPs,
+                  timePs => mixed.some(window => timePs >= window.startPs && timePs < window.endPs),
                 )
               : resolveLatch(
                   clockResolution.clock,

@@ -1,4 +1,6 @@
 import { busMixedWindows } from "./bus";
+import { derivedBusMixedWindows } from "./derivedBus";
+import type { ResolvedDataWaveform } from "./sequential";
 
 export type SignalKind = "clock" | "data";
 export type EdgePolarity = "rising" | "falling" | "both" | "transition";
@@ -76,6 +78,9 @@ export interface Bus {
   id: string;
   name: string;
   width: number;
+  /** First visible channel number; storage busIndex remains a zero-based ordinal. */
+  channelFirst?: number;
+  channelStep?: 1 | -1;
   visible: boolean;
   groupId?: string;
   startPs: number;
@@ -822,6 +827,7 @@ export function resolveConstraintRows(
   project: TimingProject, constraint: TimingConstraint,
   edgeTimes: (signal: Signal, polarity: EdgePolarity) => number[],
   shifts: Record<string, number> = {},
+  waveforms: Record<string, ResolvedDataWaveform> = {},
 ) {
   const bus = project.buses?.find(item => item.id === constraint.targetSignalId);
   const targets = bus ? project.signals.filter(signal => signal.kind === "data" && signal.busId === bus.id)
@@ -832,8 +838,10 @@ export function resolveConstraintRows(
     return resolved ? [{ constraint: laneRule, resolved }] : [];
   });
   if (bus && rows.length) {
-    const mixed = busMixedWindows(targets.filter((signal): signal is DataSignal => signal.kind === "data"),
-      project.durationPs, shifts, bus.earlyPs ?? 0, bus.latePs ?? 0);
+    const channels = targets.filter((signal): signal is DataSignal => signal.kind === "data");
+    const mixed = channels.length && channels.every(channel => isSequentialDataSignal(channel))
+      ? derivedBusMixedWindows(channels, waveforms, project.durationPs)
+      : busMixedWindows(channels, project.durationPs, shifts, bus.earlyPs ?? 0, bus.latePs ?? 0);
     const windows = rows[0].resolved.windows.map((window, index) => {
       const violations = rows.flatMap(row => row.resolved.windows[index].violatingTargetTimesPs);
       return { ...window, isViolated: violations.length > 0, violatingTargetTimesPs: violations,

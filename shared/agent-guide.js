@@ -16,9 +16,13 @@ For derived Q, edit derivation or input sources, never its pattern. DFF triggers
 Delay ranges require minPs <= currentPs <= maxPs. Delay edge indexes are ONE-BASED.
 put_delay/put_constraint replace a relation by ID. Only one source delay is allowed per target signal.
 Deleting referenced signals requires deleting/updating dependent relations and derived signals in the same batch.
-create_bus generates channel IDs; read them before editing channels. update_bus updates non-overridden channel defaults.
-Editing a bus channel's pattern/startPs/periodPs creates its local override. Individual channels cannot be deleted.
-Bus resizing, groups, arbitrary file access and saving/export are not exposed in this first API.
+create_derived_bus creates a same-width output Bus of DFF or Latch channels, mapped by zero-based busIndex to an existing input Bus and a shared Clock. Read the generated channel IDs before per-channel edits. Derived Bus width and Pattern are not editable. DFF samples inside the input Bus mixed interval keep the current-edge value and expose uncertainSamples metadata; the canvas marks these yellow unless a direct Setup/Hold violation is red.
+create_bus generates channel IDs; read them before editing channels. A name like data<10:4> infers width 7 and names channels 10 through 4; width, if given, must match. busIndex remains the zero-based channel ordinal.
+create_bus/update_bus accept earlyPs/latePs (nonnegative possible edge range). update_signal busOffsetPs sets a fixed channel offset in ps, replacing inherited range; null restores inheritance. The UI waveform reflects these edits.
+update_bus updates non-overridden channel defaults and may set channelFirst/channelStep for naming. A changed name range must match current width; resize_bus first if needed. selectedChannels and apply_bus_patterns channelIndexes use zero-based ordinals.
+apply_bus_patterns supplies one Pattern per channelIndex; existing local Pattern overrides are kept unless replaceOverrides is true. Editing a bus channel's pattern/startPs/periodPs creates its local override; restore_bus_parameter clears one such override.
+resize_bus preserves surviving channel IDs; shrinking removes deleted channels and their Delay/Setup-Hold relations. Resolve derived signals referring to deleted channels in the same batch or the entire transaction fails. Individual channels cannot be deleted.
+Bus summary rendering, X hatching and nominal edge guides follow the live project automatically. Groups, arbitrary file access and saving/export are not exposed.
 Automation limits: 100 operations per batch, 1024 signals, 4096 pattern items and relations, 100000 estimated waveform steps, 5000 returned waveform points/events, 1 MiB HTTP request. Narrow the range/IDs when a waveform read is too large.
 There are no push subscriptions in this version. Refresh before writes and after conflicts.
 Do not claim timing violations establish real hardware correctness; Chrona draws explanatory diagrams.

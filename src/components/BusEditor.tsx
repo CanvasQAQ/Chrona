@@ -4,7 +4,7 @@ import { Maximize2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ConvertibleTimeInput } from "./ConvertibleTimeInput";
 import { RateInput } from "./RateInput";
-import { generateBusPattern, parseBusSelection, parseBusTable } from "../domain/bus";
+import { busChannelNumber, formatBusName, generateBusPattern, parseBusName, parseBusSelection, parseBusTable } from "../domain/bus";
 import type { Bus, BusRule, DataSignal } from "../domain/timing";
 
 interface Props {
@@ -18,9 +18,12 @@ interface Props {
 }
 
 export function BusEditor({ bus, channels, creation, referencePeriodPs, onChange, onResize, onApplyPatterns }: Props) {
+  const derived = channels.length > 0 && channels.every(channel => channel.sourceType === "sequential");
   const [rule, setRule] = useState<BusRule>(bus.rule);
   const [autoTimeStep, setAutoTimeStep] = useState(bus.rule.timeStep === bus.width);
   const [draftWidth, setDraftWidth] = useState(bus.width);
+  const [nameDraft, setNameDraft] = useState(formatBusName(bus));
+  const [nameError, setNameError] = useState("");
   const [scope, setScope] = useState("all");
   const [replaceOverrides, setReplaceOverrides] = useState(false);
   const [selectionText, setSelectionText] = useState(bus.selectedChannels.join(", "));
@@ -29,6 +32,7 @@ export function BusEditor({ bus, channels, creation, referencePeriodPs, onChange
   const [previewOpen, setPreviewOpen] = useState(false);
   useEffect(() => { setRule(bus.rule); }, [bus.rule]);
   useEffect(() => { setDraftWidth(bus.width); }, [bus.width, bus.id]);
+  useEffect(() => { if (!creation) setNameDraft(formatBusName(bus)); }, [bus.name, bus.width, bus.channelFirst, bus.channelStep, bus.id, creation]);
   useEffect(() => { setSelectionText(bus.selectedChannels.join(", ")); }, [bus.selectedChannels]);
   const indexes = scope === "selected" ? bus.selectedChannels : Array.from({ length: bus.width }, (_, index) => index);
   const previewIndexes = indexes.slice(0, 4);
@@ -44,7 +48,7 @@ export function BusEditor({ bus, channels, creation, referencePeriodPs, onChange
     return <div className={`bus-preview-scroll${full ? " is-full" : ""}`} tabIndex={0} aria-label={full ? "All generated data" : "Generated data sample"}>
       <table className="bus-preview-table">
         <thead><tr><th scope="col">Channel ↓</th>{slots.map((slot) => <th key={slot} scope="col">Slot {slot}</th>)}</tr></thead>
-        <tbody>{rows.map((index) => <tr key={index}><th scope="row">〈{index}〉</th>{slots.map((slot) => <td key={slot}>{itemAt(index, slot)}</td>)}</tr>)}</tbody>
+        <tbody>{rows.map((index) => <tr key={index}><th scope="row">〈{busChannelNumber(bus, index)}〉</th>{slots.map((slot) => <td key={slot}>{itemAt(index, slot)}</td>)}</tr>)}</tbody>
       </table>
     </div>;
   };
@@ -73,20 +77,51 @@ export function BusEditor({ bus, channels, creation, referencePeriodPs, onChange
     } catch (cause) { setError((cause as Error).message); }
   };
 
+  const applyName = () => {
+    const input = nameDraft.trim();
+    const range = parseBusName(input);
+    if (!range && (!input || /[<>]/.test(input))) {
+      setNameError("Enter a name such as DATA<10:4> or a plain name.");
+      return;
+    }
+    if (range && range.width !== bus.width) {
+      setNameError(`This range has ${range.width} channels. Set width to ${range.width} first, then apply the name.`);
+      return;
+    }
+    onChange(range ? { name: range.name, channelFirst: range.channelFirst, channelStep: range.channelStep } : { name: input });
+    setNameError("");
+  };
+
   return <div className="bus-editor">
     <section className="property-section">
       <div className="section-title"><span>Bus</span><span className="section-index">01</span></div>
-      <TextInput label="Name" value={bus.name} onChange={(event) => onChange({ name: event.currentTarget.value })} />
-      <NumberInput label="Channels / width" min={1} max={256} value={draftWidth} onChange={(value) => { const width = Number(value); setDraftWidth(width); if (creation) { onResize(width); if (autoTimeStep) editRule({ ...rule, timeStep: width }); } }} />
-      {!creation && draftWidth !== bus.width && <Button size="xs" variant="light" disabled={!Number.isInteger(draftWidth) || draftWidth < 1 || draftWidth > 256} onClick={() => onResize(draftWidth)}>Apply width</Button>}
+      <TextInput label="Bus name and bit range" description={creation ? "For example DATA<10:4> creates channels 10 through 4." : "Edit the complete name. A new range must match the current width."} value={nameDraft} onChange={(event) => {
+        const name = event.currentTarget.value;
+        setNameDraft(name);
+        setNameError("");
+        if (!creation) return;
+        const range = creation ? parseBusName(name) : null;
+        if (range) {
+          onChange({ name: range.name, channelFirst: range.channelFirst, channelStep: range.channelStep });
+          onResize(range.width);
+          if (autoTimeStep) editRule({ ...rule, timeStep: range.width });
+        } else onChange({ name });
+      }} onKeyDown={(event) => { if (!creation && event.key === "Enter") applyName(); }} />
+      {!creation && <Button size="xs" variant="light" disabled={nameDraft.trim() === formatBusName(bus)} onClick={applyName}>Apply name</Button>}
+      {nameError && <p role="alert" className="sequential-error">{nameError}</p>}
+      <NumberInput label="Channels / width" min={1} max={256} disabled={derived} value={draftWidth} onChange={(value) => { const width = Number(value); setDraftWidth(width); if (creation) { onResize(width); if (autoTimeStep) editRule({ ...rule, timeStep: width }); } }} />
+      {!creation && !derived && draftWidth !== bus.width && <Button size="xs" variant="light" disabled={!Number.isInteger(draftWidth) || draftWidth < 1 || draftWidth > 256} onClick={() => onResize(draftWidth)}>Apply width</Button>}
+      {derived && <p className="bus-hint">Derived channels are paired with the input Bus by position. Change each channel's device or source in its Sequential logic panel. DFF samples inside the input mixed-data interval keep their current-edge value and show a yellow warning.</p>}
+      {!derived && <>
       <ConvertibleTimeInput label="Start default" valuePs={bus.startPs} referencePeriodPs={referencePeriodPs} onChange={(startPs) => onChange({ startPs })} />
       <RateInput periodPs={bus.periodPs} onChange={(periodPs) => onChange({ periodPs })} />
       <div className="bus-rule-grid">
         {(["earlyPs", "latePs"] as const).map(key => <NumberInput key={key} label={key === "earlyPs" ? "Maximum advance" : "Maximum delay"} suffix=" ps" min={0} allowNegative={false} value={bus[key] ?? 0} onChange={value => onChange({ [key]: Math.max(0, Number(value) || 0) })} />)}
       </div>
-      <p className="bus-hint">Hatching marks the possible mixed-data interval. Select a channel to set a fixed offset.</p>
+      <p className="bus-hint">Channels inherit a possible edge range of −{bus.earlyPs ?? 0} to +{bus.latePs ?? 0} ps. A fixed channel offset replaces that range and moves its actual edge. Hatching updates as you edit.</p>
       <p className="bus-hint">Each channel has a finite Pattern. After its last item, the Pattern repeats until the project ends, as with Data signals. No Clock binding is required.</p>
       {!creation && <p className="bus-hint">{channels.filter((channel) => channel.busOffsetPs !== undefined || Object.values(channel.busOverrides ?? {}).some(Boolean)).length} channels have local overrides.</p>}
+      </>}
     </section>
     {!creation && <section className="property-section">
       <div className="section-title"><span>Display</span><span className="section-index">02</span></div>
@@ -99,7 +134,7 @@ export function BusEditor({ bus, channels, creation, referencePeriodPs, onChange
       </div>
       {bus.displayMode === "selected" && <p className="bus-hint">{bus.width - bus.selectedChannels.length} channels not shown.</p>}
     </section>}
-    <section className="property-section">
+    {!derived && <section className="property-section">
       <div className="section-title"><span>Bulk data</span><span className="section-index">03</span></div>
       {!creation && <Select label="Apply to" data={[{ label: "All channels", value: "all" }, { label: "Selected channels", value: "selected" }]} value={scope} onChange={(value) => setScope(value || "all")} allowDeselect={false} />}
       {!creation && scope === "selected" && <p className="bus-hint">Generating or pasting into selected channels creates local Pattern overrides; other channels keep their current data.</p>}
@@ -127,6 +162,6 @@ export function BusEditor({ bus, channels, creation, referencePeriodPs, onChange
       {creation && <p className="bus-hint">This rule is applied to every channel when you add the Bus.</p>}
       {!creation && <><Textarea label="Paste table" description="One channel per row; one item per tab-separated column. Applies to the chosen scope atomically." minRows={3} value={table} onChange={(event) => setTable(event.currentTarget.value)} /><Button variant="light" disabled={!table.trim() || indexes.length === 0} onClick={applyTable}>Apply pasted table</Button></>}
       {error && <p role="alert" className="sequential-error">{error}</p>}
-    </section>
+    </section>}
   </div>;
 }

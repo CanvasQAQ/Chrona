@@ -1,8 +1,9 @@
 import type { z } from "zod";
 import { readSchema, transactionSchema } from "../../../shared/agent-schema.js";
-import { createBus, createBusChannels, updateBusDefaults } from "../../domain/bus";
+import { applyBusPatterns, createBus, createBusChannels, generateBusPattern, parseBusName, resizeBus, updateBusDefaults } from "../../domain/bus";
 import { clockWavePoints, type Signal, type TimingProject } from "../../domain/timing";
 import { resolveProjectTiming } from "../../domain/sequential";
+import { createDerivedBus } from "../../domain/derivedBus";
 
 type Transaction = z.infer<typeof transactionSchema>;
 export interface SessionSnapshot {
@@ -38,13 +39,15 @@ export function applyOperations(project: TimingProject, operations: Transaction[
       case "update_signal": {
         requireValue(signal, `Unknown signal: ${op.id}`);
         const p = op.patch;
-        if (signal.kind === "clock") requireValue(p.pattern === undefined && p.derivation === undefined, "Clock cannot have pattern or derivation");
+        if (signal.kind === "clock") requireValue(p.pattern === undefined && p.derivation === undefined && p.busOffsetPs === undefined, "Clock cannot have pattern, derivation or Bus offset");
         else {
           requireValue(p.phasePs === undefined && p.dutyCycle === undefined, "Data cannot have clock fields");
           requireValue(!(signal.sourceType === "sequential" && p.pattern !== undefined), "Edit the derivation or its sources, not the Q pattern");
           requireValue(p.derivation === undefined || signal.sourceType === "sequential", "Only derived Q accepts derivation updates");
+          requireValue(p.busOffsetPs === undefined || signal.busId, "Only Bus channels accept a fixed offset");
         }
         next.signals = next.signals.map((item) => item.id !== op.id ? item : ({ ...item, ...p,
+          ...(p.busOffsetPs === null ? { busOffsetPs: undefined } : {}),
           ...(p.pattern ? { patternSegments: undefined } : {}),
           ...(item.kind === "data" && item.busId ? { busOverrides: { ...item.busOverrides,
             ...(p.pattern ? { pattern: true } : {}), ...(p.startPs !== undefined ? { startPs: true } : {}),
@@ -61,17 +64,70 @@ export function applyOperations(project: TimingProject, operations: Transaction[
       case "create_bus": {
         const input = op.bus;
         requireValue(!next.signals.some((item) => item.id === input.id) && !next.buses?.some((b) => b.id === input.id), `ID already exists: ${input.id}`);
-        const bus = { ...createBus(input.name, input.width, input.startPs, input.periodPs), ...input,
-          selectedChannels: Array.from({ length: Math.min(4, input.width) }, (_, i) => i) };
+        const namedRange = parseBusName(input.name);
+        requireValue(input.width !== undefined || namedRange, "Bus width is required unless name contains a range such as data<10:4>");
+        requireValue(!namedRange || input.width === undefined || input.width === namedRange.width, "Bus width must match its name range");
+        const width = input.width ?? namedRange!.width;
+        const bus = { ...createBus(input.name, width, input.startPs, input.periodPs), ...input,
+          name: namedRange?.name ?? input.name, width,
+          channelFirst: input.channelFirst ?? namedRange?.channelFirst ?? 0,
+          channelStep: input.channelStep ?? namedRange?.channelStep ?? 1,
+          selectedChannels: Array.from({ length: Math.min(4, width) }, (_, i) => i) };
+        requireValue(bus.channelFirst + (width - 1) * bus.channelStep >= 0, "Bus channel numbers cannot be negative");
         next.buses = [...(next.buses ?? []), bus];
         next.signals.push(...createBusChannels(bus, "#7950f2"));
+        break;
+      }
+      case "create_derived_bus": {
+        const input = op.bus;
+        requireValue(!next.signals.some(item => item.id === input.id) && !next.buses?.some(bus => bus.id === input.id), `ID already exists: ${input.id}`);
+        const { bus, channels } = createDerivedBus(next, input, "#7950f2");
+        next.buses = [...(next.buses ?? []), bus];
+        next.signals.push(...channels);
         break;
       }
       case "update_bus": {
         const bus = next.buses?.find((item) => item.id === op.id);
         requireValue(bus, `Unknown bus: ${op.id}`);
+        const derived = next.signals.some(item => item.kind === "data" && item.busId === op.id && item.sourceType === "sequential");
+        requireValue(!derived || op.patch.startPs === undefined && op.patch.periodPs === undefined && op.patch.rule === undefined && op.patch.earlyPs === undefined && op.patch.latePs === undefined,
+          "Derived Bus timing comes from its channel derivations");
         requireValue(!op.patch.selectedChannels?.some((i) => i >= bus.width), "Selected channel outside bus width");
-        next = updateBusDefaults(next, op.id, op.patch);
+        const namedRange = op.patch.name ? parseBusName(op.patch.name) : null;
+        requireValue(!namedRange || namedRange.width === bus.width, "Resize the Bus before applying a different name range");
+        const patch = { ...op.patch, ...(namedRange ? { name: namedRange.name, channelFirst: namedRange.channelFirst, channelStep: namedRange.channelStep } : {}) };
+        requireValue((patch.channelFirst ?? bus.channelFirst ?? 0) + (bus.width - 1) * (patch.channelStep ?? bus.channelStep ?? 1) >= 0, "Bus channel numbers cannot be negative");
+        next = updateBusDefaults(next, op.id, patch);
+        break;
+      }
+      case "resize_bus": {
+        requireValue(next.buses?.some((item) => item.id === op.id), `Unknown bus: ${op.id}`);
+        requireValue(!next.signals.some(item => item.kind === "data" && item.busId === op.id && item.sourceType === "sequential"), "Derived Bus width is fixed to its input mapping");
+        next = resizeBus(next, op.id, op.width, "#7950f2");
+        const resized = next.buses!.find((item) => item.id === op.id)!;
+        requireValue((resized.channelFirst ?? 0) + (resized.width - 1) * (resized.channelStep ?? 1) >= 0, "Bus channel numbers cannot be negative");
+        break;
+      }
+      case "apply_bus_patterns": {
+        const bus = next.buses?.find((item) => item.id === op.id);
+        requireValue(bus, `Unknown bus: ${op.id}`);
+        requireValue(!next.signals.some(item => item.kind === "data" && item.busId === op.id && item.sourceType === "sequential"), "Derived Bus channels have no editable Pattern");
+        requireValue(op.patterns.length === op.channelIndexes.length, "One Pattern row is required for each channel index");
+        requireValue(new Set(op.channelIndexes).size === op.channelIndexes.length && op.channelIndexes.every((i) => i < bus.width), "Channel indexes must be unique and within Bus width");
+        next = applyBusPatterns(next, op.id, op.patterns, op.channelIndexes, op.replaceOverrides, false);
+        break;
+      }
+      case "restore_bus_parameter": {
+        const channel = next.signals.find((item) => item.id === op.id);
+        requireValue(channel?.kind === "data" && channel.busId, "Only Bus channels can restore Bus defaults");
+        requireValue(channel.sourceType !== "sequential", "Derived Bus channels have no inherited Pattern, Start or period");
+        const bus = next.buses?.find((item) => item.id === channel.busId);
+        requireValue(bus, `Unknown Bus for channel: ${op.id}`);
+        next.signals = next.signals.map((item) => item.id !== op.id ? item : ({ ...item,
+          ...(op.parameter === "pattern" ? { pattern: generateBusPattern(bus.rule, channel.busIndex ?? 0), patternSegments: undefined }
+            : { [op.parameter]: bus[op.parameter] }),
+          busOverrides: { ...channel.busOverrides, [op.parameter]: false },
+        } as Signal));
         break;
       }
       case "delete_bus":
@@ -143,7 +199,7 @@ function validateProject(project: TimingProject) {
     visiting.delete(id); visited.add(id);
   };
   project.signals.forEach((s) => visit(s.id));
-  const resolved = resolveProjectTiming(project.signals, project.durationPs, project.delayLinks);
+  const resolved = resolveProjectTiming(project.signals, project.durationPs, project.delayLinks, project.buses);
   requireValue(!Object.keys(resolved.errors).length, `Timing validation: ${JSON.stringify(resolved.errors)}`);
 }
 
@@ -233,7 +289,7 @@ export class ProjectSession {
       const { startPs, endPs } = request.waveform;
       requireValue(startPs < endPs && endPs <= project.durationPs, "Waveform range must lie inside project duration");
       validateProject(project);
-      const timing = resolveProjectTiming(project.signals, project.durationPs, project.delayLinks);
+      const timing = resolveProjectTiming(project.signals, project.durationPs, project.delayLinks, project.buses);
       let returnedPoints = 0;
       waveforms = selected.map((signal) => {
         const clock = timing.clockBySignalId[signal.id];
@@ -246,11 +302,12 @@ export class ProjectSession {
         }
         const data = timing.bySignalId[signal.id];
         const events = data?.events.filter((e) => e.timePs >= startPs && e.timePs <= endPs) ?? [];
-        returnedPoints += events.length;
+        const uncertainSamples = data?.uncertainSamples?.filter(sample => sample.outputTimePs >= startPs && sample.outputTimePs <= endPs) ?? [];
+        returnedPoints += events.length + uncertainSamples.length;
         requireValue(returnedPoints <= 5000, "Waveform response exceeds 5000 points/events; narrow the range or signalIds");
         return { signalId: signal.id,
           initialValue: data?.events.filter((e) => e.timePs <= startPs).at(-1)?.value ?? data?.initialValue,
-          events };
+          events, ...(uncertainSamples.length ? { uncertainSamples } : {}) };
       });
     }
     return { sessionId, revision, activity, name: project.name, durationPs: project.durationPs, timeUnit: "ps",

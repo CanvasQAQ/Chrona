@@ -6,6 +6,7 @@ import {
 } from "../../domain/timing";
 export { busMixedWindows } from "../../domain/bus";
 import { busSlotLabel } from "../../domain/bus";
+import { segmentsForResolvedWaveform, type ResolvedDataWaveform } from "../../domain/sequential";
 
 export const MIN_TRACK_HEIGHT = 48;
 export const MAX_TRACK_HEIGHT = 160;
@@ -43,11 +44,11 @@ export function buildBusSummarySegments(
   channels: DataSignal[],
   durationPs: number,
   signalShiftsPs: Record<string, number> = {},
+  resolvedWaveforms: Record<string, ResolvedDataWaveform> = {},
 ): BusSummarySegment[] {
-  const channelSegments = channels.map((channel) => buildDataSegments({
-    ...channel,
-    startPs: channel.startPs + (signalShiftsPs[channel.id] ?? 0),
-  }, durationPs));
+  const channelSegments = channels.map((channel) => channel.sourceType === "sequential" && resolvedWaveforms[channel.id]
+    ? segmentsForResolvedWaveform(resolvedWaveforms[channel.id], durationPs)
+    : buildDataSegments({ ...channel, startPs: channel.startPs + (signalShiftsPs[channel.id] ?? 0) }, durationPs));
   const boundaries = [...new Set([0, durationPs, ...channelSegments.flatMap((segments) =>
     segments.flatMap((segment) => [segment.startPs, segment.endPs]),
   )])].sort((a, b) => a - b);
@@ -71,7 +72,7 @@ export function buildBusSummarySegments(
       endPs,
       tokens,
       token: busSlotLabel(tokens),
-      detail: tokens.map((token, channel) => `〈${channels[channel].busIndex ?? channel}〉 ${token ?? "—"}`).join(" · "),
+      detail: tokens.map((token, channel) => `${channels[channel].name} ${token ?? "—"}`).join(" · "),
     });
   }
   return result;

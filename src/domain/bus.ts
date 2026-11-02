@@ -1,5 +1,27 @@
 import type { Bus, BusRule, DataSignal, Signal, TimingProject } from "./timing";
 
+export function parseBusName(input: string): { name: string; width: number; channelFirst: number; channelStep: 1 | -1 } | null {
+  const match = /^\s*(.+?)\s*<\s*(\d+)\s*:\s*(\d+)\s*>\s*$/.exec(input);
+  if (!match) return null;
+  const first = Number(match[2]);
+  const last = Number(match[3]);
+  const width = Math.abs(first - last) + 1;
+  if (width > 256 || !match[1].trim()) return null;
+  return { name: match[1].trim(), width, channelFirst: first, channelStep: first <= last ? 1 : -1 };
+}
+
+export function busChannelNumber(bus: Bus, index: number): number {
+  return (bus.channelFirst ?? 0) + index * (bus.channelStep ?? 1);
+}
+
+export function formatBusName(bus: Bus): string {
+  return `${bus.name}<${busChannelNumber(bus, 0)}:${busChannelNumber(bus, bus.width - 1)}>`;
+}
+
+export function busChannelName(bus: Bus, index: number): string {
+  return `${bus.name}〈${busChannelNumber(bus, index)}〉`;
+}
+
 export function generateBusPattern(rule: BusRule, channel: number): string[] {
   return Array.from({ length: rule.length }, (_, slot) =>
     `${rule.prefix}${rule.start + channel * rule.channelStep + slot * rule.timeStep}`,
@@ -7,11 +29,14 @@ export function generateBusPattern(rule: BusRule, channel: number): string[] {
 }
 
 export function createBus(name = "BUS", width = 40, startPs = 0, periodPs = 1000): Bus {
+  const range = parseBusName(name);
+  if (range) { name = range.name; width = range.width; }
   return {
     id: `bus-${crypto.randomUUID()}`, name, width, visible: true,
+    ...(range ? { channelFirst: range.channelFirst, channelStep: range.channelStep } : {}),
     startPs, periodPs,
     rule: { prefix: "D", start: 0, channelStep: 1, timeStep: width, length: 3 },
-    displayMode: "all", expandedMode: "all", selectedChannels: [0, 1, 2, 3],
+    displayMode: "all", expandedMode: "all", selectedChannels: Array.from({ length: Math.min(4, width) }, (_, index) => index),
   };
 }
 
@@ -19,7 +44,7 @@ export function createBusChannels(bus: Bus, color: string): DataSignal[] {
   return Array.from({ length: bus.width }, (_, index) => ({
     id: `data-${crypto.randomUUID()}`,
     kind: "data" as const,
-    name: `${bus.name}〈${index}〉`,
+    name: busChannelName(bus, index),
     busId: bus.id, busIndex: index,
     sourceType: "pattern" as const,
     startPs: bus.startPs, periodPs: bus.periodPs,
@@ -63,8 +88,8 @@ export function updateBusDefaults(project: TimingProject, busId: string, patch: 
       const overrides = signal.busOverrides ?? {};
       return {
         ...signal,
-        name: signal.name === `${old.name}〈${signal.busIndex}〉`
-          ? `${updated.name}〈${signal.busIndex}〉` : signal.name,
+        name: signal.name === busChannelName(old, signal.busIndex ?? 0)
+          ? busChannelName(updated, signal.busIndex ?? 0) : signal.name,
         startPs: overrides.startPs ? signal.startPs : updated.startPs,
         periodPs: overrides.periodPs ? signal.periodPs : updated.periodPs,
         pattern: overrides.pattern ? signal.pattern : generateBusPattern(updated.rule, signal.busIndex ?? 0),
@@ -143,6 +168,10 @@ function consecutiveBusRange(tokens: (string | null)[]): string | null {
 }
 
 export function busSlotLabel(tokens: (string | null)[]): string {
+  if (tokens.some((token) => token?.toUpperCase() === "X")) {
+    const unknown = tokens.filter((token) => token?.toUpperCase() === "X").length;
+    return unknown === tokens.length ? "X" : `X · ${unknown}/${tokens.length} channels`;
+  }
   const range = consecutiveBusRange(tokens);
   if (range) return range;
   const active = tokens.filter((token): token is string => token !== null);
@@ -159,6 +188,10 @@ export function fitBusSlotLabel(
 ): string {
   const active = tokens.filter((token): token is string => token !== null);
   if (!active.length || maxWidthPx <= 0) return "";
+  if (tokens.some((token) => token?.toUpperCase() === "X")) {
+    const label = busSlotLabel(tokens);
+    return measureText(label) <= maxWidthPx ? label : "X";
+  }
   const range = consecutiveBusRange(tokens);
   if (range && measureText(range) <= maxWidthPx) return range;
   const prefix = active.length < tokens.length ? `${active.length}/${tokens.length} · ` : "";

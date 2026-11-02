@@ -34,6 +34,7 @@ import {
   Search,
   Settings2,
   SlidersHorizontal,
+  TriangleAlert,
   Trash2,
   X,
 } from "lucide-react";
@@ -51,6 +52,7 @@ import {
 } from "react";
 import { SignalTimingEditor } from "./components/SignalTimingEditor";
 import { BusEditor } from "./components/BusEditor";
+import { DerivedBusEditor } from "./components/DerivedBusEditor";
 import { PropertyPanel } from "./features/inspector/PropertyPanel";
 import { DelayConsole } from "./features/delay-console/DelayConsole";
 import {
@@ -103,8 +105,9 @@ import {
   resolveProjectTiming,
   segmentsForResolvedWaveform,
 } from "./domain/sequential";
-import { applyBusPatterns, busChannels, createBus, createBusChannels, fitBusSlotLabel, generateBusPattern, resizeBus, updateBusDefaults } from "./domain/bus";
+import { applyBusPatterns, busChannelName, busChannels, createBus, createBusChannels, fitBusSlotLabel, formatBusName, generateBusPattern, parseBusName, resizeBus, updateBusDefaults } from "./domain/bus";
 import type { Bus } from "./domain/timing";
+import { createDerivedBus, type DerivedBusOptions } from "./domain/derivedBus";
 import { useProjectSession } from "./features/agent/useProjectSession";
 import { AgentPanel } from "./features/agent/AgentPanel";
 
@@ -169,6 +172,7 @@ function App() {
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [signalDraft, setSignalDraft] = useState<Signal | null>(null);
   const [busDraft, setBusDraft] = useState<Bus | null>(null);
+  const [derivedBusDraft, setDerivedBusDraft] = useState<DerivedBusOptions | null>(null);
   const [delayDraft, setDelayDraft] = useState<EdgeDelayLink | null>(null);
   const [constraintDraft, setConstraintDraft] = useState<TimingConstraint | null>(null);
   const [selectedId, setSelectedId] = useState("");
@@ -216,6 +220,7 @@ function App() {
 
   const signalNameKey = project.signals
     .map((signal) => signal.name)
+    .concat((project.buses ?? []).map(formatBusName))
     .join("\u0000");
 
   useLayoutEffect(() => {
@@ -232,7 +237,7 @@ function App() {
       if (bus) {
         if (!seen.has(bus.id)) {
           seen.add(bus.id);
-          if (bus.visible) rows.push({ id: bus.id, kind: "data", name: bus.name, startPs: bus.startPs, periodPs: bus.periodPs, pattern: ["BUS"], visible: true, color: signal.color });
+          if (bus.visible) rows.push({ id: bus.id, kind: "data", name: formatBusName(bus), startPs: bus.startPs, periodPs: bus.periodPs, pattern: ["BUS"], visible: true, color: signal.color });
         }
         if (bus.visible && signal.visible && (bus.displayMode === "all" || bus.displayMode === "selected" && bus.selectedChannels.includes(signal.kind === "data" ? signal.busIndex ?? -1 : -1))) rows.push(signal);
       } else if (signal.visible) rows.push(signal);
@@ -242,7 +247,7 @@ function App() {
   const signalGroups = project.signalGroups ?? [];
   const managerSignals = useMemo(() => [
     ...project.signals.filter((signal) => signal.kind !== "data" || !signal.busId),
-    ...(project.buses ?? []).map((bus): DataSignal => ({ id: bus.id, kind: "data", name: bus.name, groupId: bus.groupId, startPs: bus.startPs, periodPs: bus.periodPs, pattern: ["BUS"], visible: bus.visible, color: "#687aa2" })),
+    ...(project.buses ?? []).map((bus): DataSignal => ({ id: bus.id, kind: "data", name: formatBusName(bus), groupId: bus.groupId, startPs: bus.startPs, periodPs: bus.periodPs, pattern: ["BUS"], visible: bus.visible, color: "#687aa2" })),
   ], [project.signals, project.buses]);
   const normalizedSignalSearch = signalSearch.trim().toLocaleLowerCase();
   const matchingSignals = useMemo(
@@ -284,8 +289,9 @@ function App() {
         project.signals,
         project.durationPs,
         project.delayLinks ?? [],
+        project.buses ?? [],
       ),
-    [project.delayLinks, project.durationPs, project.signals],
+    [project.buses, project.delayLinks, project.durationPs, project.signals],
   );
   const resolvedSequentialSignals = resolvedProjectTiming;
   const referencePeriodPs = referenceClock?.periodPs ?? 1000;
@@ -389,8 +395,28 @@ function App() {
     signalShiftsPs: resolvedProjectTiming.signalShiftsPs,
   };
   const resolvedConstraints = useMemo(() => (project.timingConstraints ?? []).flatMap(constraint =>
-    resolveConstraintRows(project, constraint, (signal, polarity) => resolvedProjectTiming.edgeTimes(signal.id, polarity), resolvedProjectTiming.signalShiftsPs)
+    resolveConstraintRows(project, constraint, (signal, polarity) => resolvedProjectTiming.edgeTimes(signal.id, polarity), resolvedProjectTiming.signalShiftsPs, resolvedProjectTiming.bySignalId)
   ), [project, resolvedProjectTiming]);
+  const sampleWarningsFor = (channel: DataSignal) => {
+    if (!isSequentialDataSignal(channel)) return [];
+    const sourceId = channel.derivation.dataSignalId;
+    const source = project.signals.find(signal => signal.id === sourceId);
+    const sourceBusId = source?.kind === "data" ? source.busId : undefined;
+    return (resolvedProjectTiming.bySignalId[channel.id]?.uncertainSamples ?? []).filter(sample =>
+      sample.outputTimePs >= 0 && sample.outputTimePs <= project.durationPs &&
+      !resolvedConstraints.some(({ constraint, resolved }) =>
+        (constraint.targetSignalId === sourceId || constraint.targetSignalId === sourceBusId) &&
+        resolved.windows.some(window => window.isViolated && Math.abs(window.sourceTimePs - sample.sampleTimePs) < 1e-6)));
+  };
+  const renderSampleRisk = (channels: DataSignal[], y: number, height: number) => {
+    const samples = channels.flatMap(channel => sampleWarningsFor(channel));
+    if (!samples.length) return null;
+    const sampleTimes = [...new Set(samples.map(sample => sample.sampleTimePs))].sort((a, b) => a - b);
+    return <g className="bus-sample-risk" role="img" aria-label="Sampling in the input Bus mixed-data interval may misalign bits">
+      <title>Sampling in the input Bus mixed-data interval may misalign bits. Q shows values calculated from current edges. Sample times: {sampleTimes.join(", ")} ps.</title>
+      <rect x={CANVAS_GUTTER - 8} y={y + 5} width={canvasWidth - 2 * (CANVAS_GUTTER - 8)} height={height - 10} rx={8} />
+    </g>;
+  };
   const canvasHeight = Math.max(
     AXIS_HEIGHT +
       trackLayouts.reduce((total, track) => total + track.height, 0),
@@ -728,6 +754,10 @@ function App() {
   };
 
   const resizeSelectedBus = (id: string, width: number) => {
+    if (busChannels(project, id).every(channel => isSequentialDataSignal(channel))) {
+      setStatusMessage("Derived Bus width follows its input Bus");
+      return;
+    }
     if (!Number.isInteger(width) || width < 1 || width > 256) return;
     const old = busById.get(id);
     if (!old || old.width === width) return;
@@ -916,6 +946,15 @@ function App() {
 
   const addBus = () => setBusDraft(createBus(`BUS ${1 + (project.buses?.length ?? 0)}`));
 
+  const addDerivedBus = () => {
+    const sourceBusId = selectedBus?.id ?? (selected?.kind === "data" ? selected.busId : undefined) ?? project.buses?.[0]?.id;
+    const clockSignalId = project.signals.find(signal => signal.kind === "clock")?.id;
+    if (!sourceBusId || !clockSignalId) { setStatusMessage("Add a Bus and Clock first"); return; }
+    setDerivedBusDraft({ name: "Q BUS", sourceBusId, clockSignalId,
+      device: "dff", trigger: "rising", initialValue: "X",
+      c2q: { minPs: 0, currentPs: 10, maxPs: 20 } });
+  };
+
   const deleteBus = (id: string) => {
     const bus = busById.get(id);
     const removedIds = new Set(busChannels(project, id).map((signal) => signal.id));
@@ -944,7 +983,7 @@ function App() {
     ids.set(id, copy.id);
     const channels: DataSignal[] = original.map((signal) => ({ ...signal,
       id: ids.get(signal.id)!, busId: copy.id,
-      name: signal.name === `${source.name}〈${signal.busIndex}〉` ? `${copy.name}〈${signal.busIndex}〉` : signal.name,
+      name: signal.name === busChannelName(source, signal.busIndex ?? 0) ? busChannelName(copy, signal.busIndex ?? 0) : signal.name,
       pattern: [...signal.pattern], patternSegments: signal.patternSegments?.map((segment) => ({ ...segment, id: crypto.randomUUID() })),
       busOverrides: signal.busOverrides ? { ...signal.busOverrides } : undefined,
       derivation: signal.derivation ? { ...signal.derivation,
@@ -1646,16 +1685,34 @@ function App() {
   };
 
   const timingDraft = delayDraft ?? constraintDraft;
+  const busDraftNameError = Boolean(busDraft && /[<>]/.test(busDraft.name) && !parseBusName(busDraft.name));
+  const derivedBusSource = project.buses?.find(bus => bus.id === derivedBusDraft?.sourceBusId);
+  const derivedBusNamedRange = derivedBusDraft ? parseBusName(derivedBusDraft.name) : null;
+  const validDelayRange = (range: DelayRange | undefined) => Boolean(range && range.minPs >= 0 && range.minPs <= range.currentPs && range.currentPs <= range.maxPs);
+  const derivedBusDraftError = derivedBusDraft && (
+    !derivedBusSource ? "Choose an input Bus." :
+    !project.signals.some(signal => signal.id === derivedBusDraft.clockSignalId && signal.kind === "clock") ? "Choose a Clock." :
+    derivedBusNamedRange && derivedBusNamedRange.width !== derivedBusSource.width ? "Output name range must match input Bus width." :
+    !validDelayRange(derivedBusDraft.c2q) || derivedBusDraft.device === "latch" && !validDelayRange(derivedBusDraft.d2q) ? "Delay range must satisfy min ≤ current ≤ max." : ""
+  );
   const draftTarget = project.signals.find((signal) => signal.id === timingDraft?.targetSignalId) ?? managerSignals.find(signal => signal.id === constraintDraft?.targetSignalId);
   const closeCreation = () => {
     setSignalDraft(null);
     setBusDraft(null);
+    setDerivedBusDraft(null);
     setDelayDraft(null);
     setConstraintDraft(null);
   };
   const confirmCreation = () => {
-    if (busDraft) {
-      if (!busDraft.name.trim()) return;
+    if (derivedBusDraft) {
+      if (!derivedBusDraft.name.trim() || derivedBusDraftError) return;
+      const { bus, channels } = createDerivedBus(project, { ...derivedBusDraft, name: derivedBusDraft.name.trim() },
+        palette.signal[project.signals.length % palette.signal.length]);
+      setProject(current => ({ ...current, buses: [...(current.buses ?? []), bus], signals: [...current.signals, ...channels] }));
+      setSelectedId(bus.id);
+      setStatusMessage(`${bus.name} · ${bus.width} derived channels added`);
+    } else if (busDraft) {
+      if (!busDraft.name.trim() || busDraftNameError) return;
       const bus = { ...busDraft, name: busDraft.name.trim() };
       const channels = createBusChannels(bus, palette.signal[project.signals.length % palette.signal.length]);
       setProject((current) => ({ ...current, buses: [...(current.buses ?? []), bus], signals: [...current.signals, ...channels] }));
@@ -1701,15 +1758,18 @@ function App() {
         onSaveProject={saveProject}
       />
 
-      <Modal opened={Boolean(busDraft || signalDraft || timingDraft)} onClose={closeCreation}
-        title={busDraft ? "Add Bus" : signalDraft ? `Add ${isSequentialDataSignal(signalDraft) ? "derived" : signalDraft.kind} signal` : delayDraft ? "Add source delay" : "Add timing constraint"}
+      <Modal opened={Boolean(derivedBusDraft || busDraft || signalDraft || timingDraft)} onClose={closeCreation}
+        title={derivedBusDraft ? "Add derived Bus" : busDraft ? "Add Bus" : signalDraft ? `Add ${isSequentialDataSignal(signalDraft) ? "derived" : signalDraft.kind} signal` : delayDraft ? "Add source delay" : "Add timing constraint"}
         centered size="lg" className="creation-modal" closeOnClickOutside={false}
         closeButtonProps={{ "aria-label": "Cancel creation" }} transitionProps={{ transition: "fade", exitDuration: 0 }}>
-        <p className="creation-description">{busDraft ? "Define independent parallel data channels." : signalDraft ? "Configure your signal, then click Add to draw it on the canvas." : `Configure timing for ${draftTarget?.name ?? "signal"}, then click Add to apply it.`}</p>
+        <p className="creation-description">{derivedBusDraft ? "Sample each input Bus channel with a shared Clock." : busDraft ? "Define independent parallel data channels." : signalDraft ? "Configure your signal, then click Add to draw it on the canvas." : `Configure timing for ${draftTarget?.name ?? "signal"}, then click Add to apply it.`}</p>
+        {derivedBusDraft && <DerivedBusEditor project={project} value={derivedBusDraft} onChange={setDerivedBusDraft} />}
+        {derivedBusDraftError && <p role="alert" className="sequential-error">{derivedBusDraftError}</p>}
         {busDraft && <BusEditor creation bus={busDraft} channels={[]} referencePeriodPs={referencePeriodPs}
           onChange={(patch) => setBusDraft((draft) => draft ? { ...draft, ...patch } : draft)}
           onResize={(width) => setBusDraft((draft) => draft ? { ...draft, width } : draft)}
           onApplyPatterns={() => {}} />}
+        {busDraftNameError && <p role="alert" className="sequential-error">Complete the bit range, for example DATA&lt;10:4&gt;.</p>}
         {signalDraft && <PropertyPanel creation project={project} selected={signalDraft}
           referenceClock={referenceClock} referencePeriodPs={referencePeriodPs}
           edgeTimes={(signal, polarity) => resolvedProjectTiming.edgeTimes(signal.id, polarity)}
@@ -1726,7 +1786,7 @@ function App() {
         {signalDraft && !signalDraft.name.trim() && <p role="alert" className="sequential-error">Enter a signal name.</p>}
         <div className="creation-actions">
           <Button variant="default" onClick={closeCreation}>Cancel</Button>
-          <Button disabled={busDraft ? !busDraft.name.trim() || !Number.isInteger(busDraft.width) || busDraft.width < 1 || busDraft.width > 256 || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(busDraft.rule.prefix) || ![busDraft.rule.start, busDraft.rule.channelStep, busDraft.rule.timeStep, busDraft.rule.length].every(Number.isInteger) || busDraft.rule.length < 1 || busDraft.rule.length > 256 : signalDraft ? !signalDraft.name.trim() : !draftTarget} onClick={confirmCreation}>Add</Button>
+          <Button disabled={derivedBusDraft ? !derivedBusDraft.name.trim() || Boolean(derivedBusDraftError) : busDraft ? !busDraft.name.trim() || busDraftNameError || !Number.isInteger(busDraft.width) || busDraft.width < 1 || busDraft.width > 256 || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(busDraft.rule.prefix) || ![busDraft.rule.start, busDraft.rule.channelStep, busDraft.rule.timeStep, busDraft.rule.length].every(Number.isInteger) || busDraft.rule.length < 1 || busDraft.rule.length > 256 : signalDraft ? !signalDraft.name.trim() : !draftTarget} onClick={confirmCreation}>Add</Button>
         </div>
       </Modal>
       <Modal opened={Boolean(pendingBusResize)} onClose={() => { setPendingBusResize(null); setBusEditorVersion((value) => value + 1); }} title="Reduce Bus width?" centered size="sm">
@@ -1921,6 +1981,7 @@ function App() {
                     Data
                   </Menu.Item>
                   <Menu.Item leftSection={<Layers3 size={16} />} onClick={addBus}>Bus</Menu.Item>
+                  <Menu.Item leftSection={<GitBranch size={16} />} disabled={!project.buses?.length || !project.signals.some(signal => signal.kind === "clock")} onClick={addDerivedBus}>Derived Bus</Menu.Item>
                   <Menu.Divider />
                   <Menu.Item
                     leftSection={<GitBranch size={16} />}
@@ -2209,6 +2270,8 @@ function App() {
                 {trackLayouts.map(({ height, signal }) => {
                   const bus = busById.get(signal.id);
                   const child = signal.kind === "data" && signal.busId;
+                  const riskChannels = bus ? busChannels(project, bus.id) : signal.kind === "data" ? [signal] : [];
+                  const hasBitMisalignment = riskChannels.some(channel => sampleWarningsFor(channel).length > 0);
                   return (
                   <div
                     key={signal.id}
@@ -2239,7 +2302,7 @@ function App() {
                       size={14}
                       aria-hidden="true"
                     />
-                    {bus && <ActionIcon variant="subtle" color="gray" size="sm" aria-label={`${bus.displayMode === "collapsed" ? "Expand" : "Collapse"} ${bus.name}`} onClick={() => updateBus(bus.id, { displayMode: bus.displayMode === "collapsed" ? bus.expandedMode ?? "all" : "collapsed" })}>{bus.displayMode === "collapsed" ? <ChevronRight size={14} /> : <ChevronDown size={14} />}</ActionIcon>}
+                    {bus && <ActionIcon variant="subtle" color="gray" size="sm" aria-label={`${bus.displayMode === "collapsed" ? "Expand" : "Collapse"} ${formatBusName(bus)}`} onClick={() => updateBus(bus.id, { displayMode: bus.displayMode === "collapsed" ? bus.expandedMode ?? "all" : "collapsed" })}>{bus.displayMode === "collapsed" ? <ChevronRight size={14} /> : <ChevronDown size={14} />}</ActionIcon>}
                     <UnstyledButton
                       className="track-select"
                       aria-pressed={signal.id === selectedId}
@@ -2259,6 +2322,7 @@ function App() {
                       }}
                     >
                       <span>{signal.name}</span>
+                      {hasBitMisalignment && <Tooltip label="Bit misalignment risk" withArrow><span className="track-risk-icon" role="img" aria-label="Bit misalignment risk"><TriangleAlert size={13} strokeWidth={2} /></span></Tooltip>}
                       {bus && <small className="bus-track-count">{bus.displayMode === "selected" ? `${bus.width - bus.selectedChannels.length} hidden` : `${bus.width} ch`}</small>}
                     </UnstyledButton>
                     {!child &&
@@ -2464,9 +2528,10 @@ function App() {
                   if (bus) {
                     const channels = busChannels(project, bus.id);
                     const shifts = resolvedDelayLinks.signalShiftsPs;
-                    const windows = busMixedWindows(channels, project.durationPs, shifts, bus.earlyPs ?? 0, bus.latePs ?? 0);
+                    const derived = channels.length > 0 && channels.every(channel => isSequentialDataSignal(channel));
+                    const windows = derived ? [] : busMixedWindows(channels, project.durationPs, shifts, bus.earlyPs ?? 0, bus.latePs ?? 0);
                     let windowIndex = 0;
-                    const stable = buildBusSummarySegments(channels, project.durationPs, shifts).flatMap(segment => {
+                    const stable = buildBusSummarySegments(channels, project.durationPs, shifts, resolvedSequentialSignals.bySignalId).flatMap(segment => {
                       let cursor = segment.startPs;
                       const parts = [];
                       while (windows[windowIndex]?.endPs <= cursor) windowIndex++;
@@ -2486,20 +2551,43 @@ function App() {
                       return `M ${left} ${center} L ${left + notch} ${top} H ${right - notch} L ${right} ${center} L ${right - notch} ${bottom} H ${left + notch} Z`;
                     };
                     const hatchId = `bus-hatch-${bus.id}`;
-                    return <g key={bus.id} className="wave-row bus-wave-row">
+                    const unknownId = `bus-unknown-${bus.id}`;
+                    const busColor = displaySignalColors[Math.max(0, project.signals.findIndex(item => item.id === channels[0]?.id)) % displaySignalColors.length];
+                    const nominalEdges = derived
+                      ? [...new Set(channels.flatMap(channel => resolvedSequentialSignals.bySignalId[channel.id]?.events.map(event => event.timePs) ?? []))]
+                      : [...new Set(channels.flatMap(channel => {
+                      if (!Number.isFinite(channel.periodPs) || channel.periodPs <= 0) return [];
+                      const edgeStart = channel.startPs + (shifts[channel.id] ?? 0);
+                      return windows.flatMap(window => {
+                        const edges: number[] = [];
+                        const firstSlot = Math.max(0, Math.ceil((window.startPs - edgeStart) / channel.periodPs));
+                        for (let slot = firstSlot; slot < firstSlot + 512; slot++) {
+                          const edge = edgeStart + slot * channel.periodPs;
+                          if (edge >= window.endPs) break;
+                          if (edge > window.startPs && edge > 0) edges.push(edge);
+                        }
+                        return edges;
+                      });
+                    }))];
+                    return <g key={bus.id} className="wave-row bus-wave-row" style={{ "--bus-color": busColor } as CSSProperties}>
                       <rect className="row-hitbox" x="0" y={y} width="100%" height={height} />
                       <line className="row-divider" x1="0" x2="100%" y1={y + height - 1} y2={y + height - 1} />
+                      {derived && renderSampleRisk(channels, y, height)}
                       <defs><pattern id={hatchId} width="7" height="7" patternUnits="userSpaceOnUse">
                         <path d="M-1 1 L1 -1 M0 7 L7 0 M6 8 L8 6" className="bus-hatch-line" />
+                      </pattern><pattern id={unknownId} width="8" height="8" patternUnits="userSpaceOnUse">
+                        <path d="M0 0 L8 8 M8 0 L0 8" className="bus-unknown-line" />
                       </pattern></defs>
                       {stable.map((segment, index) => {
                         const left = timelineX(segment.startPs);
                         const right = timelineX(segment.endPs);
-                        const label = fitBusSlotLabel(segment.tokens, right - left - 18, measureBusSummaryText);
+                        const label = fitBusSlotLabel(segment.tokens, right - left - 18, value => measureBusSummaryText(value) * dataLabelFontSize / 10);
+                        const unknown = segment.tokens.some(token => token?.toUpperCase() === "X");
                         return <g key={index}>
                           <title>{segment.detail}</title>
-                          <path className="bus-summary-shape" d={outline(left, right)} />
-                          {label && <text className="bus-summary-label" textAnchor="middle" x={(left + right) / 2} y={center + 3.5}>{label}</text>}
+                          <path className={`bus-summary-shape${unknown ? " is-unknown" : ""}`} d={outline(left, right)} />
+                          {unknown && <path className="bus-unknown-fill" fill={`url(#${unknownId})`} d={outline(left, right)} />}
+                          {label && <text className="bus-summary-label" style={{ fontSize: dataLabelFontSize }} textAnchor="middle" x={(left + right) / 2} y={center + 3.5}>{label}</text>}
                         </g>;
                       })}
                       {windows.map(window => {
@@ -2512,6 +2600,8 @@ function App() {
                           <path className="bus-mixed-window" fill={`url(#${hatchId})`} d={shape} />
                         </g>;
                       })}
+                      {nominalEdges.filter(edge => windows.some(window => edge > window.startPs && edge < window.endPs)).map(edge =>
+                        <line key={edge} className="bus-nominal-edge" x1={timelineX(edge)} x2={timelineX(edge)} y1={top} y2={bottom} />)}
                     </g>;
                   }
                   const signalIndex = project.signals.findIndex(
@@ -2546,6 +2636,7 @@ function App() {
                         width="100%"
                         height={height}
                       />
+                      {renderedSignal.kind === "data" && renderSampleRisk([renderedSignal], y, height)}
                       <line
                         className="row-divider"
                         x1="0"

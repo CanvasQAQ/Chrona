@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.3.3 — 2026-11-02
+
+### Added
+
+- 批量创建同宽 Derived Bus，逐路 DFF/Latch 采样，支持 MCP `create_derived_bus` 与 `uncertainSamples` 查询
+- Bus 可使用 `DATA<10:4>` 形式的编号范围，已创建的 Bus 可在属性面板修改完整名称与通道编号
+- Derived Bus 采样输入混合区时，以整行淡黄色外框及名称旁的 warning 图标提示 bit 错位风险
+
+### Changed
+
+- Bus 对起始 `X`、主题与调色板的展示更清晰，混合区内标出实际边沿
+- 明确 Bus 范围继承与固定通道偏移的编辑提示，并补充示例与 MCP 文档
+
+### Validation
+
+- 生产构建、全量测试通过
+
 ## v0.3.2 — 2026-11-02
 
 ### Changed

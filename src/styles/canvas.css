@@ -133,9 +133,24 @@
 .bus-child-header { padding-left: 20px; }
 .bus-child-header .track-drag-grip { opacity: 0; }
 .bus-track-count { flex: none; margin-left: auto; padding-left: 5px; color: var(--text-soft); font-size: 9px; }
-.bus-summary-shape { fill: color-mix(in srgb, var(--violet) 14%, var(--canvas)); stroke: color-mix(in srgb, var(--violet) 72%, var(--text)); stroke-width: 1.8; vector-effect: non-scaling-stroke; }
+.track-risk-icon { display: inline-flex; flex: none; align-items: center; margin-left: 5px; color: #d58c00; }
+.canvas-viewport[data-palette="monochrome"] .track-risk-icon { color: #b89142; }
+[data-mantine-color-scheme="dark"] .canvas-viewport:not([data-palette="monochrome"]) .track-risk-icon { color: #dfad33; }
+[data-mantine-color-scheme="dark"] .canvas-viewport[data-palette="monochrome"] .track-risk-icon { color: #c9b77e; }
+.bus-summary-shape { fill: color-mix(in srgb, var(--bus-color, var(--violet)) 14%, var(--canvas)); stroke: color-mix(in srgb, var(--bus-color, var(--violet)) 72%, var(--text)); stroke-width: 1.8; vector-effect: non-scaling-stroke; }
+.bus-summary-shape.is-unknown { fill: color-mix(in srgb, var(--text-soft) 12%, var(--canvas)); stroke: var(--text-soft); }
+.bus-unknown-fill { pointer-events: none; opacity: .5; }
+.bus-unknown-line { fill: none; stroke: var(--text-soft); stroke-width: .8; }
+.bus-nominal-edge { stroke: var(--text-soft); stroke-width: 1; stroke-dasharray: 2 3; opacity: .55; pointer-events: none; }
+.bus-sample-risk { pointer-events: visiblePainted; }
+.bus-sample-risk rect {
+  fill: var(--bus-risk-fill);
+  stroke: var(--bus-risk-stroke);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
 .bus-summary-rails { fill: none; stroke: color-mix(in srgb, var(--violet) 50%, transparent); stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: none; }
-.bus-summary-label { fill: color-mix(in srgb, var(--violet) 68%, var(--text)); font-family: var(--mantine-font-family-monospace); font-size: 10px; font-weight: 700; pointer-events: none; }
+.bus-summary-label { fill: color-mix(in srgb, var(--bus-color, var(--violet)) 68%, var(--text)); font-family: var(--mantine-font-family-monospace); font-size: 10px; font-weight: 700; pointer-events: none; }
 
 .track-actions {
   position: absolute;
@@ -766,6 +781,26 @@
 
 .timing-canvas.has-glow .wave-path-glow {
   display: block;
+}
+
+.timing-canvas {
+  --bus-risk-stroke: #d58c00;
+  --bus-risk-fill: color-mix(in srgb, #edbd58 8%, transparent);
+}
+
+.timing-canvas[data-palette="monochrome"] {
+  --bus-risk-stroke: #d7ae58;
+  --bus-risk-fill: color-mix(in srgb, #ead28a 9%, transparent);
+}
+
+[data-mantine-color-scheme="dark"] .timing-canvas:not([data-palette="monochrome"]) {
+  --bus-risk-stroke: #dfad33;
+  --bus-risk-fill: color-mix(in srgb, #dfad33 12%, transparent);
+}
+
+[data-mantine-color-scheme="dark"] .timing-canvas[data-palette="monochrome"] {
+  --bus-risk-stroke: #bda666;
+  --bus-risk-fill: color-mix(in srgb, #e0cd8d 8%, transparent);
 }
 
 .timing-canvas[data-palette="monochrome"] {

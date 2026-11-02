@@ -4,6 +4,7 @@ const id = z.string().min(1).max(128).regex(/^[a-zA-Z0-9_-]+$/);
 const name = z.string().trim().min(1).max(200);
 const time = z.number().finite().min(0).max(1e9);
 const period = time.min(1);
+const offset = z.number().finite().min(-1e9).max(1e9);
 const color = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 const pattern = z.array(z.string().min(1).max(128)).min(1).max(4096);
 const range = z.object({ minPs: time, currentPs: time, maxPs: time }).strict();
@@ -25,10 +26,11 @@ const patch = z.object({
   color: color.optional(), periodPs: period.optional(), phasePs: time.optional(),
   dutyCycle: z.number().finite().min(0.05).max(0.95).optional(), pattern: pattern.optional(),
   derivation: derivation.optional(),
+  busOffsetPs: offset.nullable().optional(),
 }).strict();
-const rule = z.object({ prefix: z.string().max(64), start: z.number().finite(),
-  channelStep: z.number().finite(), timeStep: z.number().finite(),
-  length: z.number().int().min(1).max(4096) }).strict();
+const rule = z.object({ prefix: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/).max(64), start: z.number().int().finite(),
+  channelStep: z.number().int().finite(), timeStep: z.number().int().finite(),
+  length: z.number().int().min(1).max(256) }).strict();
 const edge = z.number().int().min(1).max(100000);
 const polarity = z.enum(["rising", "falling", "both", "transition"]);
 const relation = { id, sourceSignalId: id, targetSignalId: id, sourceEdge: edge, targetEdge: edge };
@@ -36,13 +38,24 @@ export const operationSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("create_signal"), signal: z.discriminatedUnion("kind", [clock, data, derived]) }).strict(),
   z.object({ type: z.literal("update_signal"), id, patch }).strict(),
   z.object({ type: z.literal("delete_signal"), id }).strict(),
-  z.object({ type: z.literal("create_bus"), bus: z.object({ id, name, width: z.number().int().min(1).max(256),
-    startPs: time.default(0), periodPs: period, rule: rule.optional() }).strict() }).strict(),
+  z.object({ type: z.literal("create_bus"), bus: z.object({ id, name, width: z.number().int().min(1).max(256).optional(),
+    startPs: time.default(0), periodPs: period, rule: rule.optional(), earlyPs: time.optional(), latePs: time.optional(),
+    channelFirst: z.number().int().min(0).max(1e9).optional(), channelStep: z.union([z.literal(1), z.literal(-1)]).optional() }).strict() }).strict(),
+  z.object({ type: z.literal("create_derived_bus"), bus: z.object({ id, name, sourceBusId: id, clockSignalId: id,
+    device: z.enum(["dff", "latch"]), trigger: z.enum(["rising", "falling", "high", "low"]),
+    c2q: range, d2q: range.optional(), initialValue: z.string().min(1).max(128) }).strict() }).strict(),
   z.object({ type: z.literal("update_bus"), id, patch: z.object({ name: name.optional(),
     startPs: time.optional(), periodPs: period.optional(), rule: rule.optional(),
+    earlyPs: time.optional(), latePs: time.optional(), channelFirst: z.number().int().min(0).max(1e9).optional(),
+    channelStep: z.union([z.literal(1), z.literal(-1)]).optional(),
     visible: z.boolean().optional(), displayMode: z.enum(["collapsed", "selected", "all"]).optional(),
     selectedChannels: z.array(z.number().int().min(0).max(255)).max(256).optional(),
   }).strict() }).strict(),
+  z.object({ type: z.literal("resize_bus"), id, width: z.number().int().min(1).max(256) }).strict(),
+  z.object({ type: z.literal("apply_bus_patterns"), id,
+    channelIndexes: z.array(z.number().int().min(0).max(255)).min(1).max(256),
+    patterns: z.array(pattern).min(1).max(256), replaceOverrides: z.boolean().default(false) }).strict(),
+  z.object({ type: z.literal("restore_bus_parameter"), id, parameter: z.enum(["pattern", "startPs", "periodPs"]) }).strict(),
   z.object({ type: z.literal("delete_bus"), id }).strict(),
   z.object({ type: z.literal("put_delay"), delay: z.object({ ...relation,
     label: name.optional(), minPs: time, currentPs: time, maxPs: time }).strict() }).strict(),
