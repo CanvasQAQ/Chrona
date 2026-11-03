@@ -10,6 +10,7 @@ export interface SessionSnapshot {
   project: TimingProject;
   sessionId: string;
   revision: number;
+  isDirty: boolean;
   canUndo: boolean;
   canRedo: boolean;
   activity: string;
@@ -211,14 +212,27 @@ export class ProjectSession {
   private requests = new Map<string, { fingerprint: string; result: Record<string, unknown>; bytes: number }>();
   private requestBytes = 0;
   private projectSizes = new WeakMap<TimingProject, number>();
+  private savedProject: TimingProject;
+  private savedContent: string;
   constructor(project: TimingProject) {
-    this.snapshot = { project, sessionId: crypto.randomUUID(), revision: 0, canUndo: false, canRedo: false, activity: "Engineering session ready" };
+    this.savedProject = project;
+    this.savedContent = JSON.stringify(project);
+    this.snapshot = { project, sessionId: crypto.randomUUID(), revision: 0, isDirty: false, canUndo: false, canRedo: false, activity: "Engineering session ready" };
   }
   getSnapshot = () => this.snapshot;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
+  private differsFromSaved(project: TimingProject) {
+    return project !== this.savedProject && JSON.stringify(project) !== this.savedContent;
+  }
+  markSaved(project: TimingProject) {
+    this.savedProject = project;
+    this.savedContent = JSON.stringify(project);
+    this.snapshot = { ...this.snapshot, isDirty: this.differsFromSaved(this.snapshot.project) };
+    this.listeners.forEach((listener) => listener());
+  }
   private publish(project: TimingProject, activity: string) {
     this.snapshot = { ...this.snapshot, project, revision: this.snapshot.revision + 1,
-      canUndo: !!this.undoStack.length, canRedo: !!this.redoStack.length, activity };
+      isDirty: this.differsFromSaved(project), canUndo: !!this.undoStack.length, canRedo: !!this.redoStack.length, activity };
     this.listeners.forEach((listener) => listener());
   }
   private trimHistory() {
@@ -242,8 +256,10 @@ export class ProjectSession {
     this.publish(next, activity);
   };
   open = (project: TimingProject) => {
+    this.savedProject = project;
+    this.savedContent = JSON.stringify(project);
     this.undoStack = []; this.redoStack = []; this.requests.clear(); this.requestBytes = 0;
-    this.snapshot = { project, sessionId: crypto.randomUUID(), revision: 0, canUndo: false, canRedo: false, activity: "Project opened · new editing session" };
+    this.snapshot = { project, sessionId: crypto.randomUUID(), revision: 0, isDirty: false, canUndo: false, canRedo: false, activity: "Project opened · new editing session" };
     this.listeners.forEach((listener) => listener());
   };
   undo = () => {

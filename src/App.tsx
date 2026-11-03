@@ -39,7 +39,6 @@ import {
   X,
 } from "lucide-react";
 import {
-  type ChangeEvent,
   type CSSProperties,
   type DragEvent,
   type PointerEvent as ReactPointerEvent,
@@ -77,10 +76,10 @@ import {
   ProjectHeader,
   type ExportMode,
 } from "./features/project/ProjectHeader";
+import { useProjectFiles } from "./features/project/useProjectFiles";
 import { buildStandaloneSvg } from "./features/project/svgExport";
 import {
   downloadTextFile,
-  parseTimingProject,
 } from "./features/project/projectSerialization";
 import {
   buildPeriodGrid,
@@ -203,7 +202,6 @@ function App() {
   }, [snapshot.activity, snapshot.revision]);
   const [delayConsoleOpen, setDelayConsoleOpen] = useState(false);
   const [delayConsoleCollapsed, setDelayConsoleCollapsed] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const canvasViewportRef = useRef<HTMLDivElement>(null);
   const zoomRef = useRef(zoom);
@@ -1260,15 +1258,6 @@ function App() {
     setDragOverId(null);
   };
 
-  const saveProject = () => {
-    downloadTextFile(
-      `${project.name.toLowerCase().replace(/\s+/g, "-")}.chrona.json`,
-      JSON.stringify(project, null, 2),
-      "application/json",
-    );
-    setStatusMessage("Project saved");
-  };
-
   const currentViewRange = (): ExportRange => {
     const viewport = canvasViewportRef.current;
     if (!viewport) return { startPs: 0, endPs: project.durationPs };
@@ -1341,35 +1330,14 @@ function App() {
     );
   };
 
-  const openProject = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = parseTimingProject(String(reader.result), {
-        canvasSettings: DEFAULT_CANVAS_SETTINGS,
-        durationPs: initialProject.durationPs,
-      });
-      if (!result.ok) {
-        setStatusMessage(
-          result.reason === "unsupported"
-            ? "This project uses an unsupported schema"
-            : "Could not read this project file",
-        );
-        return;
-      }
-
-      session.open(result.project);
-      const first = result.project.signals[0];
-      setSelectedId(first?.kind === "data" && first.busId ? first.busId : first?.id ?? "");
-      setExportStartPs(0);
-      setExportEndPs(result.project.durationPs);
-      setIsLabelWidthAuto(true);
-      setStatusMessage(`${result.project.name} opened`);
-    };
-    reader.readAsText(file);
-    event.target.value = "";
-  };
+  const files = useProjectFiles(session, { canvasSettings: DEFAULT_CANVAS_SETTINGS, durationPs: initialProject.durationPs }, (opened) => {
+    const first = opened.signals[0];
+    setSelectedId(first?.kind === "data" && first.busId ? first.busId : first?.id ?? "");
+    setExportStartPs(0);
+    setExportEndPs(opened.durationPs);
+    setIsLabelWidthAuto(true);
+    setCollapsedGroups(new Set());
+  }, setStatusMessage);
 
   const renderSignalGroup = (group?: SignalGroup) => {
     const groupId = group?.id ?? "ungrouped";
@@ -1747,16 +1715,22 @@ function App() {
         exportMode={exportMode}
         exportPanelOpen={exportPanelOpen}
         exportStartPs={exportStartPs}
-        fileInputRef={fileInputRef}
+        files={files}
         formatTime={formatAxisTime}
         onExport={exportSvg}
         onExportEndChange={setExportEndPs}
         onExportModeChange={setExportMode}
         onExportPanelOpenChange={setExportPanelOpen}
         onExportStartChange={setExportStartPs}
-        onOpenProject={openProject}
-        onSaveProject={saveProject}
       />
+
+      <Modal opened={Boolean(files.pending)} onClose={files.cancelOpen} title="Unsaved changes" centered size="sm">
+        <p>Discard changes to {files.label} and open {files.pending?.file.name}? Choose Keep editing to save your current project first.</p>
+        <div className="project-dialog-actions">
+          <Button variant="default" data-autofocus onClick={files.cancelOpen}>Keep editing</Button>
+          <Button color="red" onClick={files.discardAndOpen}>Discard and open</Button>
+        </div>
+      </Modal>
 
       <Modal opened={Boolean(derivedBusDraft || busDraft || signalDraft || timingDraft)} onClose={closeCreation}
         title={derivedBusDraft ? "Add derived Bus" : busDraft ? "Add Bus" : signalDraft ? `Add ${isSequentialDataSignal(signalDraft) ? "derived" : signalDraft.kind} signal` : delayDraft ? "Add source delay" : "Add timing constraint"}

@@ -25,3 +25,21 @@ interface AgentConnectionStatus {
   endpoint?: string;
   token?: string;
 }
+
+interface ProjectFileInfo {
+  name: string;
+  path?: string;
+}
+
+interface Window {
+  chronaFiles?: {
+    open: () => Promise<(ProjectFileInfo & { text: string }) | null>;
+    save: (request: { currentPath?: string; saveAs: boolean; name: string; text: string }) => Promise<ProjectFileInfo | null>;
+  };
+  showOpenFilePicker?: (options: ProjectPickerOptions) => Promise<FileSystemFileHandle[]>;
+  showSaveFilePicker?: (options: ProjectPickerOptions & { suggestedName: string; startIn?: FileSystemFileHandle }) => Promise<FileSystemFileHandle>;
+}
+
+interface ProjectPickerOptions {
+  types: { description: string; accept: Record<string, string[]> }[];
+}

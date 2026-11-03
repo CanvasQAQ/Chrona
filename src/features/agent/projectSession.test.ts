@@ -12,6 +12,23 @@ function request(session: ProjectSession, operations: unknown[], requestId = cry
   return { sessionId, expectedRevision: revision, requestId, operations };
 }
 describe("live engineering session", () => {
+  it("tracks the saved contents across editing, undo, an in-flight save and opening another file", () => {
+    const session = new ProjectSession(empty());
+    session.execute(request(session, [clk]));
+    const written = session.getSnapshot().project;
+    expect(session.getSnapshot().isDirty).toBe(true);
+    session.update(p => ({ ...p, durationPs: 9000 }));
+    session.markSaved(written);
+    expect(session.getSnapshot().isDirty).toBe(true);
+    session.undo();
+    expect(session.getSnapshot().isDirty).toBe(false);
+    session.redo();
+    expect(session.getSnapshot().isDirty).toBe(true);
+    session.update(p => ({ ...p, durationPs: written.durationPs }));
+    expect(session.getSnapshot().isDirty).toBe(false);
+    session.open(empty());
+    expect(session.getSnapshot()).toMatchObject({ isDirty: false, canUndo: false });
+  });
   it("creates a batch once and one undo restores it; redo and undo advance revisions", () => {
     const session = new ProjectSession(empty());
     const req = request(session, [clk, data]);

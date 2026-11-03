@@ -16,6 +16,11 @@ contextBridge.exposeInMainWorld("chronaAgent", {
   respond: (id, result) => ipcRenderer.send("agent:response", id, result),
 });
 
+contextBridge.exposeInMainWorld("chronaFiles", {
+  open: () => ipcRenderer.invoke("project:open"),
+  save: (request) => ipcRenderer.invoke("project:save", request),
+});
+
 contextBridge.exposeInMainWorld("chronaWindow", {
   platform: process.platform,
   minimize: () => ipcRenderer.send("window:minimize"),

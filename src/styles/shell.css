@@ -309,3 +309,30 @@ button,
   background: var(--panel-subtle);
   font-size: 9px;
 }
+
+.project-identity {
+  display: grid;
+  min-width: 0;
+  line-height: 1.35;
+}
+.project-identity strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+.project-identity small {
+  color: var(--text-soft);
+}
+.app-shell[data-platform="darwin"] .project-identity {
+  margin-left: 76px;
+}
+.project-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+@media (max-width: 760px) {
+  .topbar .brand { display: none; }
+  .topbar { gap: 8px; }
+}

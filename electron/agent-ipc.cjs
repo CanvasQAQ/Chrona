@@ -56,6 +56,6 @@ function installAgentIpc(ipcMain, app) {
     if (!item || item.senderId !== event.sender.id) return;
     pending.delete(id); clearTimeout(item.timer); item.resolve(result);
   });
-  app.on("before-quit", () => { for (const state of states.values()) void stop(state); });
+  app.on("will-quit", () => { for (const state of states.values()) void stop(state); });
 }
 module.exports = { installAgentIpc };

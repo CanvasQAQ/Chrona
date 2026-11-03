@@ -16,18 +16,19 @@ import {
   Minus,
   Moon,
   Save,
+  SaveAll,
   Square,
   Sun,
   X,
 } from "lucide-react";
 import {
-  type ChangeEventHandler,
-  type RefObject,
   type ReactNode,
   useEffect,
   useState,
 } from "react";
 import chronaIcon from "../../assets/chrona.png";
+
+import type { useProjectFiles } from "./useProjectFiles";
 
 export type ExportMode = "view" | "range" | "all";
 
@@ -38,15 +39,13 @@ interface ProjectHeaderProps {
   exportMode: ExportMode;
   exportPanelOpen: boolean;
   exportStartPs: number;
-  fileInputRef: RefObject<HTMLInputElement | null>;
+  files: ReturnType<typeof useProjectFiles>;
   formatTime: (timePs: number) => string;
   onExport: () => void;
   onExportEndChange: (value: number) => void;
   onExportModeChange: (mode: ExportMode) => void;
   onExportPanelOpenChange: (opened: boolean) => void;
   onExportStartChange: (value: number) => void;
-  onOpenProject: ChangeEventHandler<HTMLInputElement>;
-  onSaveProject: () => void;
 }
 
 export function ProjectHeader({
@@ -56,15 +55,13 @@ export function ProjectHeader({
   exportMode,
   exportPanelOpen,
   exportStartPs,
-  fileInputRef,
+  files,
   formatTime,
   onExport,
   onExportEndChange,
   onExportModeChange,
   onExportPanelOpenChange,
   onExportStartChange,
-  onOpenProject,
-  onSaveProject,
 }: ProjectHeaderProps) {
   const { setColorScheme } = useMantineColorScheme();
   const colorScheme = useComputedColorScheme("light");
@@ -90,6 +87,11 @@ export function ProjectHeader({
         </div>
       </div>
 
+      <div className="project-identity" title={files.path ?? files.label}>
+        <strong>{files.label}</strong>
+        {files.isDirty && <small>Unsaved changes</small>}
+      </div>
+
       <div className="topbar-actions">
         {extraActions}
         <Tooltip label="Open project">
@@ -98,29 +100,40 @@ export function ProjectHeader({
             color="gray"
             size="lg"
             aria-label="Open project"
-            onClick={() => fileInputRef.current?.click()}
+            disabled={files.busy}
+            onClick={files.open}
           >
             <FolderOpen size={18} />
           </ActionIcon>
         </Tooltip>
         <input
-          ref={fileInputRef}
+          ref={files.input}
           className="visually-hidden"
           type="file"
           accept=".json,.chrona.json"
-          onChange={onOpenProject}
+          onChange={(event) => {
+            const selected = event.target.files?.[0];
+            event.target.value = "";
+            if (selected) void files.importFile(selected);
+          }}
         />
-        <Tooltip label="Save project">
+        <Tooltip label={files.canWrite ? "Save project" : "Download project copy"}>
           <ActionIcon
             variant="subtle"
             color="gray"
             size="lg"
-            aria-label="Save project"
-            onClick={onSaveProject}
+            aria-label={files.canWrite ? "Save project" : "Download project copy"}
+            disabled={files.busy}
+            onClick={() => files.save()}
           >
             <Save size={18} />
           </ActionIcon>
         </Tooltip>
+        {files.canWrite && <Tooltip label="Save project as…">
+          <ActionIcon variant="subtle" color="gray" size="lg" aria-label="Save project as" disabled={files.busy} onClick={() => files.save(true)}>
+            <SaveAll size={18} />
+          </ActionIcon>
+        </Tooltip>}
         <Tooltip
           label={`Switch to ${colorScheme === "dark" ? "light" : "dark"} theme`}
         >

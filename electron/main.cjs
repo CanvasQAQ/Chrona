@@ -1,6 +1,8 @@
-const { app, BrowserWindow, ipcMain, shell } = require("electron/main");
+const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron/main");
 const path = require("node:path");
 require("./agent-ipc.cjs").installAgentIpc(ipcMain, app);
+
+require("./project-files.cjs").installProjectFiles(ipcMain, BrowserWindow, dialog);
 
 const isDevelopment = process.argv.includes("--dev");
 const isMac = process.platform === "darwin";
@@ -57,6 +59,16 @@ function createWindow() {
       sandbox: true,
       preload: path.join(__dirname, "preload.cjs"),
     },
+  });
+
+  window.webContents.on("will-prevent-unload", (event) => {
+    const choice = dialog.showMessageBoxSync(window, {
+      type: "warning", title: "Unsaved changes",
+      message: "Leave without saving your project?",
+      detail: "Choose Keep editing to return to the project and save your changes.",
+      buttons: ["Keep editing", "Discard changes"], defaultId: 0, cancelId: 0,
+    });
+    if (choice === 1) event.preventDefault(); // Override the renderer's unload veto.
   });
 
   const sendMaximizedState = () => {
