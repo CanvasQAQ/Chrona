@@ -1,94 +1,55 @@
-# Chrona
+<p align="center">
+  <img src="src/assets/chrona.png" width="96" height="96" alt="Chrona 项目标志">
+</p>
 
-Chrona 是一款面向硬件设计、验证和系统工程师的可交互 Timing Diagram 编辑器。
+<h1 align="center">Chrona</h1>
 
-当前版本：v0.3.2。
+<p align="center">绘制数字时序图，观察延迟如何改变信号边沿。</p>
 
-## 当前能力
+<p align="center">
+  <a href="docs/quickstart-timing-diagram.md">快速入门</a> ·
+  <a href="https://github.com/CanvasQAQ/Chrona/releases">下载桌面版</a> ·
+  <a href="CHANGELOG.md">版本记录</a>
+</p>
 
-- 创建并编辑 Clock / Data 波形，使用统一的 `ps` 时间模型
-- 创建多通道 Bus，批量生成或粘贴数据，并按折叠、精选、全部三种模式展示
-- 为 Bus 设置混合区范围及逐路固定 skew，在汇总行查看不确定区，并对整条 Bus 设置 Setup/Hold
-- 从指定 Clock 与 Data 实时派生 DFF / Latch 输出；支持采样边沿或透明电平，以及 C→Q / D→Q 的 Min / Current / Max 延迟
-- 为任意目标 Signal 配置来自任意 Source Signal 的 Delay，并通过锚点边沿联动整条目标波形
-- 通过底部 Delay Console 集中浏览和调节 Source Delay 与 Derived Data 的 C→Q / D→Q；同一 Derived Signal 的传播延迟聚合在一条控制带中
-- 使用 Min / Current / Max 表达 Delay 范围，并为图中测量线设置 `t1`、`t2` 等自定义名称
-- 为任意 Signal 添加多边沿 Setup/Hold 约束；目标边沿进入窗口时，以低干扰的半透明红色区域反馈
-- 调整轨道高度、纵向网格和网格间隔，并随工程保存
-- 保存/打开 `.chrona.json` 工程，导出包含波形、Delay 与约束窗口的 SVG
-- 桌面版可按需启用本地 MCP，让 Agent 读取、创建和修改当前工程；支持版本冲突保护、批量提交与统一 Undo/Redo
+<p align="center">
+  <a href="https://github.com/CanvasQAQ/Chrona/actions/workflows/build-desktop.yml"><img src="https://github.com/CanvasQAQ/Chrona/actions/workflows/build-desktop.yml/badge.svg?branch=main" alt="main 分支桌面构建状态"></a>
+</p>
 
-Chrona 的 Timing 功能用于制作清晰、可复现的调试示意图，不替代 STA，也不自动判断路径、裕量或问题来源。
+Chrona 是面向硬件设计、验证和系统工程师的交互式时序图编辑器。你可以绘制时钟和数据波形，调整延迟，观察边沿相对 Setup/Hold 窗口的位置，再把图导出为 SVG。Chrona 用于解释时序关系，不替代静态时序分析（STA）。
 
-## Sequential Derived Data
+## 使用 Chrona 画图
 
-当工程中至少存在一个 Clock 和一个 Data 后，可从 `Add → Derived data` 创建持续联动的 Q：
+第一次使用？从[打开示例、调整 Delay 并导出 SVG](docs/quickstart-timing-diagram.md) 开始。桌面安装包见 [GitHub Releases](https://github.com/CanvasQAQ/Chrona/releases)：Windows x64 提供安装版和便携版 ZIP，Linux x64 提供 AppImage 和 deb，macOS 提供 Intel 和 Apple Silicon 的 dmg。
 
-- DFF 支持 Rising/Falling 采样边沿和 C→Q Min/Current/Max
-- Latch 支持 High/Low 透明电平，并分别设置 C→Q、D→Q Min/Current/Max
-- Current 生成实际 Q 波形；Min/Max 在每个输出边沿显示可能到达范围
-- Q 可以继续参与 Delay、Setup/Hold，或作为下一级 DFF/Latch 的 Data 输入
-- Delay 与 Sequential Derivation 使用统一依赖图，延迟后的 CLK、Data、Q 会继续向下游传播
+| 想观察什么 | 打开哪个工程 |
+| --- | --- |
+| 调整 Delay 后，数据边沿怎样移动 | [基础时序示例](examples/generic-timing-example.chrona.json) |
+| 查看、折叠或展开多通道 Bus | [40 路和 20 路总线](examples/bus-example.chrona.json) |
+| 比较通道提前、延后和继承总线范围的效果 | [四路偏移示例](examples/bus-skew.chrona.json) |
+| 查看时钟采样后的输出和 bit 错位提示 | [派生总线示例](examples/bus-derived.chrona.json) |
 
-## 项目文档
+要自己创建总线、批量填入数据或解释波形中的混合区，请参阅[总线与通道](docs/BUS.md)。
 
-- [产品需求文档（PRD）](docs/PRD.md)
-- [V1 交互修订说明](docs/INTERACTION_SPEC.md)
-- [工程约定](docs/CONVENTIONS.md)
-- [Bus 功能与交互](docs/BUS.md)
-- [版本记录](CHANGELOG.md)
-- [本机 Agent 接入与 MCP API](docs/AGENT_API.md)
-- [Agent 接入实施计划](docs/AGENT_INTEGRATION_PLAN.md)
+## 通过 MCP 控制 Chrona
 
-## 本地运行
+从[连接桌面版并创建第一组信号](docs/AGENT_API.md#连接)开始。Agent 修改的是当前窗口的工程，你可以在画布上看到结果，也可以撤销修改。网页预览不提供本地 MCP 服务。
+
+- [读取工程与提交操作](docs/AGENT_API.md#接口与说明)：查工具、参数、操作类型和请求示例。
+- [处理版本冲突与超时](docs/AGENT_API.md#一致性与恢复)：区分何时应重读工程、何时应原样重试。
+
+## 开发和维护 Chrona
+
+从源码运行桌面版，在仓库根目录使用 Node.js 22（与 CI 一致）和 npm：
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
-`npm run dev` 会同时启动 Vite Renderer 和 Electron 桌面窗口。只调试网页 Renderer 时可使用：
+只运行网页编辑器用 `npm run dev:renderer`。运行测试用 `npm test`，检查类型并构建用 `npm run build`。本地构建 Linux 安装包用 `npm run package:linux`。
 
-```bash
-npm run dev:renderer
-```
-
-## 验证
-
-```bash
-npm test
-npm run build
-```
-
-## 桌面安装包
-
-GitHub Actions 会在提交到 `main`、向 `main` 提交 Pull Request，或手动触发工作流时，
-自动构建以下安装包，并保留为工作流产物：
-
-- Windows x64（安装版与免安装版各一个 `.zip`；解压后分别运行安装程序或便携版程序）
-- Linux x64（`.AppImage` 和 `.deb`）
-- macOS Intel 与 Apple Silicon（`.dmg`）
-
-创建并推送以 `v` 开头的 Git 标签（例如 `v0.1.0`）后，工作流还会自动创建
-GitHub Release，并把以上安装包上传到该 Release。
-
-本地构建 Linux 安装包：
-
-```bash
-npm run package:linux
-```
-
-## 示例工程
-
-- [Generic Timing Example](examples/generic-timing-example.chrona.json)
-- [Bus Example（2 Clock + 40/20 路 Bus）](examples/bus-example.chrona.json)
-- [Bus Skew Example（4 路提前、延后与继承范围）](examples/bus-skew.chrona.json)
-
-常用画布操作：
-
-- `Mouse Drag`：抓取并平移画布
-- `Time Axis Drag`：横向选择时间范围并放大到填满视口
-- `Ctrl + Mouse Wheel`：以鼠标所在时间点为中心缩放
-- `Shift + Mouse Wheel`：同步调整全部轨道与波形高度
-- `Fit All`：恢复并横向显示完整时间范围
-- `Canvas Settings`：设置 48–160 px 轨道高度，以及纵向网格显示方式和间隔
+- [工程约定](docs/CONVENTIONS.md)：了解目录职责、桌面界面规范和时序引擎的约束。
+- 修改功能时，按[仓库文档维护指南](AGENTS.md)找到对应的用户指南、接口参考和示例。
+- [版本记录](CHANGELOG.md)与[桌面构建工作流](.github/workflows/build-desktop.yml)：查看各版本的变化和打包流程。推送到 main、向 main 提交 PR 或手动运行均会构建安装包；推送 v 开头的版本标签还会发布到 GitHub Releases。
+- 设计与交付背景：[产品需求基线](docs/PRD.md)、[V1 交互修订](docs/INTERACTION_SPEC.md)、[Agent 首版实施记录](docs/AGENT_INTEGRATION_PLAN.md)。

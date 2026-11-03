@@ -1,7 +1,6 @@
 # Chrona V1 交互修订说明
 
-> 状态：已进入实现
-> 日期：2026-07-27
+> 用途：V1 交互设计与修订记录，初稿日期 2026-07-27。第一次使用编辑器请看[时序图快速入门](quickstart-timing-diagram.md)。
 >
 > 2026-10-31：Bus 交互补充见 [Bus 功能与交互](BUS.md)。Bus 标题和子通道分别进入整体与局部编辑；折叠/精选/展开只改变显示行，不改变 Timing。
 
@@ -53,12 +52,15 @@ Data Pattern 由有序 Symbol Token 构成，例如：
 D0 D1 D2 D1
 ```
 
-输入方式：
+在 Pattern 编辑器中选择 **Add segment**，按所需内容选一种段：
 
-1. 点击快捷 Token：`0`、`1`、`D0`、`D1`、`D2`、`X`
-2. 输入单个自定义 Token，例如 `D3`
-3. 通过空格、逗号或分号批量输入，例如 `D3 D4 D5`
-4. 点击序列中的 Token 将其删除
+| 段类型 | 用法 |
+| --- | --- |
+| **Range** | 设置前缀、起止编号和步进，例如用前缀 D、起点 0、终点 2、步进 1 生成 `D0 D1 D2`。 |
+| **Logic** | 输入由 `0`、`1`、`X`、`Z` 组成的序列，例如 `0011`。 |
+| **Symbols** | 在 **Values** 中输入标签，例如 `IDLE ACTIVE WAIT`。 |
+
+各段可设置 **Repeat**，也可复制、删除或拖动排序。要修改单个标签，编辑所在段的字段。
 
 颜色规则：
 
@@ -206,7 +208,7 @@ Setup/Hold Constraint 同样从当前选中的目标 Signal 添加，并独立�
 ## 8. Sequential Derived Data
 
 - Add 菜单在工程至少存在一个 Clock 和一个 Data 后开放 Derived Data
-- 新建输出默认使用当前选中的 Data 和第一个 Clock，并立即选中新 Q
+- 新建输出默认使用当前选中的 Data 和第一个 Clock；在创建窗口选择 **Add** 后才将 Q 加入画布并选中它
 - 属性面板用 DFF/Latch 分段控件切换器件；DFF 显示 Sampling Edge 和 C→Q，Latch 显示 Transparent Level、C→Q 与 D→Q
 - 每个 Delay Range 使用 Min、Current、Max 数值输入和 Current 滑块，始终满足 `0 ≤ Min ≤ Current ≤ Max`
 - 派生 Data 不显示 Start、Rate 或 Pattern Builder；其波形由源信号和衍生参数实时计算

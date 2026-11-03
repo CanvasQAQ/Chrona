@@ -2,7 +2,7 @@
 
 > 文档状态：V1 需求基线
 > 记录日期：2026-07-27
-> 实现状态：V1 开发中
+> 用途：记录需求、验收目标和设计取舍。当前操作入口见[项目首页](../README.md)，各版本交付内容见[版本记录](../CHANGELOG.md)。
 > 原产品工作名：Timing Diagram Editor
 
 > 2026-07-28 修订：输入、Data Pattern、Signal Track Header、Canvas 与动画定义已更新。冲突内容以 [V1 交互修订说明](INTERACTION_SPEC.md) 为准。
@@ -28,7 +28,7 @@ Chrona 是一个面向硬件设计工程师、验证工程师和系统工程师�
 - Setup/Hold 时序约束
 - Timing Window
 - Delay 变化造成的边沿关系
-- 时序动画扫描
+- 调节 Delay 时波形与测量线的实时联动
 
 产品帮助工程师在设计、调试和文档沟通阶段清晰表达已知的复杂时序关系。它不替代 STA，也不负责自动定位或判断问题。
 
@@ -141,7 +141,7 @@ PNG 和 PDF 导出属于后续版本。
 
 #### 打开工程
 
-从 JSON 文件恢复完整编辑状态。
+从 JSON 恢复时序工程与画布设置；缩放、滚动位置、选中项和撤销历史不随工程恢复。
 
 ### 6.2 Signal 管理
 
@@ -303,11 +303,12 @@ TimingProject
 │   └── Data
 ├── EdgeDelayLink[]
 ├── TimingConstraint[]
-├── CanvasSettings
-└── ViewState
+├── Bus[]
+├── SignalGroup[]
+└── CanvasSettings
 ```
 
-数据模型应独立于具体 UI 组件，并能够无损序列化为 JSON。旧版 `linkedTiming` 仅用于打开历史工程时迁移，不再作为新工程的写入结构。
+上图仅列主要时序与画布字段；完整字段见 [TimingProject 类型](../src/domain/timing.ts)。数据模型应独立于具体 UI 组件，并能够无损序列化为 JSON。旧版 `linkedTiming` 仅用于打开历史工程时迁移，不再作为新工程的写入结构。
 
 ## 9. 非功能需求
 
@@ -359,7 +360,7 @@ Shortcut 是否纳入首个 V1 发布里程碑，在开发排期时确认。
 ### 10.3 V2 / P1：编辑能力增强
 
 - Annotation：Text、Arrow、Measurement
-- Bus，例如 `DATA[7:0]`（基础多通道编辑与展示已提前实现；数值解析和串并转换仍待后续版本）
+- Bus，例如 `DATA<7:0>`（基础多通道编辑与展示已提前实现；数值解析和串并转换仍待后续版本）
 
 ### 10.4 V2 / P2：输出能力增强
 
@@ -377,7 +378,7 @@ V1 达到以下条件时视为可验收：
 3. 用户可以为任意 Signal 配置跨类型 Source Delay，修改 Current 后整条目标波形及后级 Delay 实时联动。
 4. 用户可以在 Period/Frequency 之间切换输入，并得到相同的底层时间值。
 5. 用户可以在 ps/phase 之间切换输入 Start 和 Clock Phase。
-6. 用户可以使用快捷 Token 或批量输入构建 `D0 D1 D2` Pattern。
+6. 用户可以用 Range 段生成 `D0 D1 D2`，或在 Symbols 段批量输入标签。
 7. 相同 Data Token 在所有位置使用相同颜色，并始终显示名称。
 8. 用户可以拖拽 Signal Track Header 改变波形顺序，并复制 Signal。
 9. 用户可以保存工程，重新打开后 Signals 与 Canvas Settings 正确恢复。
@@ -407,15 +408,15 @@ V1 达到以下条件时视为可验收：
 2. 所有影响时序的编辑操作都必须经过 Timing Engine。
 3. UI 是编辑器，Timing Engine 是可独立测试的时序计算核心。
 
-## 14. 开工前待确认事项
+## 14. 早期问题与当前结论
 
-以下事项不阻塞需求归档，但需要在技术设计或首轮迭代拆分时明确：
+| 早期问题 | 当前结论 |
+| --- | --- |
+| 桌面运行时与前端选型 | Electron 桌面窗口承载 React/Vite 编辑器，目录职责见[工程约定](CONVENTIONS.md)。 |
+| Pattern 输入格式 | 使用 Range、Logic 或 Symbols 段，见[交互说明](INTERACTION_SPEC.md#4-data-pattern-builder)。 |
+| Delay 形成循环 | Delay 和派生信号共享依赖图；解析器报告循环，MCP 拒绝包含无效依赖的写入批次。 |
+| 多个 Clock 时如何换算角度 | Start 输入以工程中第一个 Clock 为参考，没有 Clock 时使用 1000 ps；Clock phase 使用该 Clock 自身周期。 |
+| 撤销与重做 | 桌面编辑器的手动操作和 Agent 提交共享会话内的撤销与重做历史。 |
+| 工程格式与迁移 | 当前写入 v3，打开时兼容 v2；见[工程文件解析器](../src/features/project/projectSerialization.ts)。 |
 
-- 桌面运行时和前端技术栈
-- Data Pattern 的 V1 输入格式及合法性规则
-- Delay 依赖形成环路时的阻止与解释方式
-- 很长的 Delay 链同时存在时的关系筛选与排版方式
-- 多个 Clock 存在时，`deg` 输入关联哪个 Clock
-- Undo/Redo 是否属于首个可发布版本
-- 100 Signal 场景对应的目标 Edge 数量及性能门槛
-- JSON 工程格式的初始 Schema 和版本迁移策略
+需求基线尚未给出 100 个 Signal 时的目标边沿数及帧率门槛，也未规定长 Delay 链的专门排版标准。

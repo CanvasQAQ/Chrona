@@ -1,8 +1,6 @@
-# Design System Master File
+# Chrona 早期视觉探索稿（归档）
 
-> **LOGIC:** When building a specific page, first check `design-system/pages/[page-name].md`.
-> If that file exists, its rules **override** this Master file.
-> If not, strictly follow the rules below.
+> 以下是初期生成的配色、组件和页面方案，保留作设计背景。移动端布局、营销页结构及阴影示例均未作为桌面编辑器的规范。维护桌面界面请参阅[工程约定](../../docs/CONVENTIONS.md)。
 
 ---
 

@@ -4,7 +4,7 @@ Chrona 桌面版提供可选的本地 MCP Server。外部 Agent 修改的是当�
 
 ## 连接
 
-1. 运行 `npm run dev`，或构建后运行 `npm start` 打开 Electron 桌面应用。
+1. 打开已安装的 Chrona 桌面版，或[从源码启动桌面版](../README.md#开发和维护-chrona)。
 2. 顶部 **Agent → Enable local access**。
 3. 点击 **Copy MCP configuration**，在支持 Streamable HTTP、自定义 Authorization header 的 Agent 客户端中添加服务。复制结果采用通用 JSON 形式；客户端配置格式不同时，将 URL 和 header 填入对应字段。
 
@@ -129,9 +129,9 @@ Delay 边沿编号从 1 开始，延迟范围满足 `0 <= minPs <= currentPs <= 
 - 非法操作或最终依赖图校验失败则整个批次零写入。删除依赖源时必须在同一批次显式处理相关 Delay/Constraint/Derived Q。
 - 暂无推送订阅。版本检查在执行时发生，不依赖客户端是否刷新上下文。
 
-修订号、去重记录和撤销历史只在内存。打开工程重新生成 sessionId、从 revision 0 开始；不修改 `.chrona.json` 格式。Undo/Redo 合计最多保留 50 步且快照序列化后的估算总大小不超过 16 MiB（实际对象堆占用不同）；不提供跨会话撤销或选择性“只撤销某个 Agent”的操作。保存仍使用现有 Save 按钮。
+修订号、去重记录和撤销历史只在内存。打开工程重新生成 sessionId、从 revision 0 开始；不修改 `.chrona.json` 格式。Undo/Redo 合计最多保留 50 步且快照序列化后的估算总大小不超过 16 MiB（实际对象堆占用不同）；不提供跨会话撤销或选择性“只撤销某个 Agent”的操作。需要保留更改时，在桌面版选择 **Save project** 保存，或选择 **Save project as…** 另存副本。
 
-## 第一版限制
+## 当前接口限制
 
 每批至多 100 个操作，工程至多 1024 个信号、4096 条关系，Pattern 至多 4096 项。为避免阻塞画布，Agent 提交/波形读取还会限制估算的波形计算步数为 100000（含偏移与 Delay），每次返回最多 5000 个波形点/事件；超限需缩小范围或调整工程。手动编辑不受自动化接口这些额度的限制。
 
