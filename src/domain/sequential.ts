@@ -17,7 +17,7 @@ import { derivedBusMixedWindows } from "./derivedBus";
 
 export interface ResolvedDataEvent {
   value: string;
-  cause: "c2q" | "d2q";
+  cause: "start" | "c2q" | "d2q";
   causeTimePs: number;
   timePs: number;
   minTimePs: number;
@@ -71,9 +71,11 @@ function patternWaveform(
   const pattern = patternForDataSignal(signal);
   const periodPs = clampDuration(signal.periodPs);
   const events: ResolvedDataEvent[] = [];
-  let previous = pattern[0];
+  const delayed = signal.startPs > 0;
+  const initialValue = delayed ? "X" : pattern[0] ?? "X";
+  let previous = initialValue;
   for (
-    let index = 1, timePs = signal.startPs + periodPs;
+    let index = delayed ? 0 : 1, timePs = signal.startPs + index * periodPs;
     timePs <= durationPs;
     index += 1, timePs = signal.startPs + index * periodPs
   ) {
@@ -81,7 +83,7 @@ function patternWaveform(
     if (value !== previous) {
       events.push({
         value,
-        cause: "d2q",
+        cause: index === 0 ? "start" : "d2q",
         causeTimePs: timePs,
         timePs,
         minTimePs: timePs,
@@ -90,7 +92,7 @@ function patternWaveform(
     }
     previous = value;
   }
-  return { initialValue: pattern[0] ?? "X", events };
+  return { initialValue, events };
 }
 
 export function valueAtWaveform(
@@ -305,7 +307,8 @@ function dataEdgesFromWaveform(
       polarity === "both" ||
       (polarity === "rising" && previous === "0" && current === "1") ||
       (polarity === "falling" && previous === "1" && current === "0");
-    if (matches && event.timePs >= 0 && event.timePs <= durationPs) {
+    // Pattern availability is sampled by devices but is not a numbered timing edge.
+    if (matches && event.cause !== "start" && event.timePs >= 0 && event.timePs <= durationPs) {
       result.push(event.timePs);
     }
     previous = current;

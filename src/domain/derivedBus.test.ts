@@ -41,6 +41,21 @@ describe("derived Bus", () => {
       c2q: { minPs: 0, currentPs: 10, maxPs: 20 } }, "#654321")).toThrow("width");
   });
 
+  it("keeps only the late input lane unknown on the first sampled word", () => {
+    const project = makeProject();
+    const late = project.signals[2];
+    if (late.kind !== "data") throw new Error("Expected input channel");
+    late.busOffsetPs = 501;
+    const { bus, channels } = createDerivedBus(project, { name: "Q", sourceBusId: project.buses![0].id,
+      clockSignalId: "clk", device: "dff", trigger: "falling", initialValue: "X",
+      c2q: { minPs: 10, currentPs: 20, maxPs: 30 } }, "#654321");
+    const timing = resolveProjectTiming([...project.signals, ...channels], project.durationPs, [], [...project.buses!, bus]);
+    const summary = buildBusSummarySegments(channels, project.durationPs, timing.signalShiftsPs, timing.bySignalId);
+    expect(summary.slice(0, 3).map(({ startPs, tokens }) => [startPs, tokens])).toEqual([
+      [0, ["X", "X"]], [520, ["A", "X"]], [1520, ["B", "C"]],
+    ]);
+  });
+
   it("keeps the current DFF value and records a warning for mixed-input sampling", () => {
     const project = makeProject();
     const { channels } = createDerivedBus(project, { name: "Q", sourceBusId: project.buses![0].id,

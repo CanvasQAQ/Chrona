@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveProjectTiming, resolveSequentialSignals } from "./sequential";
+import { resolveProjectTiming, resolveSequentialSignals, valueAtWaveform } from "./sequential";
 import { resolveTimingConstraint } from "./timing";
 import type { ClockSignal, DataSignal, Signal } from "./timing";
 
@@ -44,6 +44,39 @@ function output(
 }
 
 describe("sequential derived data", () => {
+  it.each([
+    [0, "A", "B"],
+    [49, "A", "B"],
+    [50, "A", "B"],
+    [51, "X", "A"],
+    [151, "X", "X"],
+    [200, "X", "X"],
+  ] as const)("samples a pattern starting at %i ps on falling edges", (startPs, first, second) => {
+    const input = { ...data, startPs, periodPs: 100, pattern: ["A", "B"] };
+    const q = output({
+      device: "dff", clockSignalId: clock.id, dataSignalId: data.id, trigger: "falling",
+      c2q: { minPs: 5, currentPs: 5, maxPs: 5 }, initialValue: "1",
+    });
+    const waveform = resolveProjectTiming([clock, input, q], 155).bySignalId.q;
+    expect([54, 55, 155].map(time => valueAtWaveform(waveform, time))).toEqual(["1", first, second]);
+  });
+
+  it.each([
+    [20, "d2q", 23],
+    [50, "c2q", 107],
+    [75, "c2q", 107],
+    [100, "c2q", 107],
+  ] as const)("propagates the first valid latch input starting at %i ps", (startPs, cause, timePs) => {
+    const input = { ...data, startPs, pattern: ["A"] };
+    const q = output({
+      device: "latch", clockSignalId: clock.id, dataSignalId: data.id, trigger: "high",
+      c2q: { minPs: 7, currentPs: 7, maxPs: 7 },
+      d2q: { minPs: 3, currentPs: 3, maxPs: 3 }, initialValue: "X",
+    });
+    const waveform = resolveProjectTiming([clock, input, q], 140).bySignalId.q;
+    expect(waveform.events).toEqual([expect.objectContaining({ cause, timePs, value: "A" })]);
+  });
+
   it("samples D on DFF edges and applies the C→Q range", () => {
     const signals: Signal[] = [
       clock,
@@ -171,6 +204,23 @@ describe("sequential derived data", () => {
       timePs: 45,
       value: "1",
     });
+  });
+
+  it("samples from the linked start and preserves numbered pattern edges", () => {
+    const input = { ...data, startPs: 10, periodPs: 100, pattern: ["0", "1"] };
+    const q = output({
+      device: "dff", clockSignalId: clock.id, dataSignalId: data.id, trigger: "falling",
+      c2q: { minPs: 5, currentPs: 5, maxPs: 5 }, initialValue: "X",
+    });
+    const timing = resolveProjectTiming([clock, input, q], 300, [{
+      id: "link", sourceSignalId: clock.id, targetSignalId: data.id, sourceEdge: 1, targetEdge: 1,
+      minPs: 160, currentPs: 160, maxPs: 160,
+    }]);
+    expect(timing.delayById.link).toMatchObject({ targetBaseTimePs: 110, targetShiftPs: 50 });
+    expect(timing.edgeTimes(data.id)).toEqual([160, 260]);
+    expect(timing.edgeTimes(data.id, "rising")).toEqual([160]);
+    expect([59, 60, 160].map(time => valueAtWaveform(timing.bySignalId.d, time))).toEqual(["X", "0", "1"]);
+    expect(timing.bySignalId.q.events.map(({ timePs, value }) => [timePs, value])).toEqual([[155, "0"], [255, "1"]]);
   });
 
   it("resolves setup/hold windows from derived signal edges", () => {
