@@ -9,6 +9,8 @@
 1. 打开 Chrona，在顶部工具栏选择文件夹图标 **Open project**。
 2. 选择 `generic-timing-example.chrona.json`。打开后，画布左侧会列出 **CLK**、**AUX_CLK**、**DATA_BUS** 等信号，工具栏的 **Duration** 为 12000 ps。
 
+选中画布左侧的 **CLK**，右侧 **Clock waveform** 会把 Start、Clock phase 和时钟波形显示在同一张卡片。切换到 **DATA_BUS**，可在 **Edit segments** 编辑序列，在 **Data waveform** 观察结果。两种预览都从 0 ps 开始，负时间部分被裁掉。这里显示基础波形；下一步的来源 Delay 对齐结果请在主画布查看。
+
 ## 让数据晚到 200 ps
 
 1. 在画布上方选择 **Delays**，打开底部的延迟控制台。找到目标为 **DATA_BUS**、来源为 **AUX_CLK**、测量线名称为 **t2** 的一行。

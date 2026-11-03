@@ -9,6 +9,7 @@ interface ConvertibleTimeInputProps {
   referencePeriodPs: number;
   onChange: (valuePs: number) => void;
   description?: string;
+  initialUnit?: "ps" | "deg";
 }
 
 export function ConvertibleTimeInput({
@@ -17,8 +18,9 @@ export function ConvertibleTimeInput({
   referencePeriodPs,
   onChange,
   description,
+  initialUnit = "deg",
 }: ConvertibleTimeInputProps) {
-  const [unit, setUnit] = useState<"ps" | "deg">("deg");
+  const [unit, setUnit] = useState<"ps" | "deg">(initialUnit);
   const labelId = useId();
   const displayedValue =
     unit === "ps" ? valuePs : psToDegrees(valuePs, referencePeriodPs);

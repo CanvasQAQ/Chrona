@@ -1,0 +1,22 @@
+html,body,#root {min-width:0}
+body {overflow:auto}
+.lab {color:var(--text);background:var(--app-bg);min-height:100dvh}
+.mast {height:49px;background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 max(22px,calc((100vw - 880px)/2));font-size:12px;white-space:nowrap;color:var(--text-soft)}
+.mast strong {font-size:17px;letter-spacing:-.7px;color:var(--text)}.slash {padding:0 3px;color:var(--border-strong)}
+.brandmark {display:grid;place-items:center;width:28px;height:28px;border-radius:7px;background:#4d4093;color:white}
+.mast button {margin-left:auto;border:1px solid var(--border);border-radius:8px;color:var(--text-soft);background:var(--panel);width:34px;height:32px;display:grid;place-items:center}
+.lab-body {max-width:924px;margin:auto;padding:17px 22px 10px}.intro .overline,.pro-head small,.column-tag>span,.lab footer span,.recipe small {font:600 10px/1.4 ui-monospace,monospace;letter-spacing:.12em}
+.intro .overline {color:var(--violet);margin:0}.intro h1 {font-size:clamp(23px,3vw,31px);line-height:1.3;letter-spacing:-.05em;margin:4px 0}.intro p {color:var(--text-soft);font-size:13px;margin:0;line-height:1.6}
+.controls {display:flex;gap:16px;align-items:flex-end;padding:12px 0 15px}.controls>div:first-child {flex:1;max-width:335px}.controls>div>label,.controls .mantine-InputWrapper-label {display:block;font-weight:600;font-size:11px;margin-bottom:4px;color:var(--text-soft)}.controls>button {margin-left:auto}
+.columns {display:grid;grid-template-columns:1fr 1fr;gap:18px}.columns article {display:flex;flex-direction:column;overflow:hidden;min-width:0;height:clamp(440px,calc(100dvh - 268px),860px);background:var(--panel);border:1px solid var(--border-strong);border-radius:12px;box-shadow:0 3px 12px #20243a07}
+.columns article.suggested {border-color:color-mix(in srgb,var(--violet) 45%,var(--border))}
+.column-tag {display:flex;align-items:center;gap:9px;padding:8px 13px;border-bottom:1px solid var(--border);background:var(--panel-subtle);font-size:12px}
+.column-tag i {font:600 11px ui-monospace,monospace;border:1px solid var(--border-strong);border-radius:4px;padding:3px 6px}
+.column-tag>span {color:var(--text-soft);margin-left:auto;font-size:9px}.suggested .column-tag {background:var(--violet-soft)}.suggested .column-tag i {background:#5949a4;color:white;border-color:transparent}
+.columns .property-panel {flex:1}
+.lab footer {margin-top:9px;display:flex;align-items:center;gap:6px;color:var(--text-soft);font-size:11px}.lab footer span {margin-left:auto;font-size:9px}
+@media(max-width:690px){.lab-body {padding:12px 8px}.mast {padding:0 12px}.controls {gap:6px;flex-wrap:wrap}.columns {gap:8px;min-width:640px}.lab-body {overflow-x:auto}.columns article {height:65dvh;min-height:430px}.lab footer span {display:none}}
+.pro-head>div {min-width:0}
+/* Card layout for the proposed inspector. */
+.lab-body {padding-top:12px}
+.columns article {height:clamp(440px,calc(100dvh - 218px),900px)}

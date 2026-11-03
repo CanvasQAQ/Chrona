@@ -24,6 +24,7 @@ import {
 
 interface DataPatternEditorProps {
   pattern: string[];
+  descriptiveLabels?: boolean;
   segments?: DataPatternSegment[];
   onChange: (
     pattern: string[],
@@ -169,6 +170,7 @@ function hasErrors(segments: SegmentDraft[]) {
 export function DataPatternEditor({
   pattern,
   segments,
+  descriptiveLabels = false,
   onChange,
 }: DataPatternEditorProps) {
   const [drafts, setDrafts] = useState<SegmentDraft[]>(() =>
@@ -402,9 +404,10 @@ export function DataPatternEditor({
                       }
                     />
                   </SegmentField>
-                  <SegmentField label="Repeat" error={errors.repeat}>
+                  <SegmentField label={descriptiveLabels ? "Hold" : "Repeat"} error={errors.repeat}>
                     <NumberInput
                       value={segment.repeat}
+                      title={descriptiveLabels ? "Slots held per value" : undefined}
                       aria-label="Range repeat count"
                       error={Boolean(errors.repeat)}
                       size="xs"

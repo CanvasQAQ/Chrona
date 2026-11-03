@@ -52,4 +52,5 @@ npm run dev
 - [工程约定](docs/CONVENTIONS.md)：了解目录职责、桌面界面规范和时序引擎的约束。
 - 修改功能时，按[仓库文档维护指南](AGENTS.md)找到对应的用户指南、接口参考和示例。
 - [版本记录](CHANGELOG.md)与[桌面构建工作流](.github/workflows/build-desktop.yml)：查看各版本的变化和打包流程。推送到 main、向 main 提交 PR 或手动运行均会构建安装包；推送 v 开头的版本标签还会发布到 GitHub Releases。
+- 属性栏设计对照：运行 `npm run dev:renderer` 后，在开发服务器打开 [/design/inspector/](design/inspector/index.html)，切换信号比较原版、分组卡片与折叠布局。选择 32 路派生 Bus 可试用通道搜索。
 - 设计与交付背景：[产品需求基线](docs/PRD.md)、[V1 交互修订](docs/INTERACTION_SPEC.md)、[Agent 首版实施记录](docs/AGENT_INTEGRATION_PLAN.md)。

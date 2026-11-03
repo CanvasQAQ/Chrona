@@ -12,6 +12,7 @@ import {
 
 interface RateInputProps {
   label?: string;
+  initialMode?: "period" | "frequency";
   periodPs: number;
   onChange: (periodPs: number) => void;
 }
@@ -19,9 +20,10 @@ interface RateInputProps {
 export function RateInput({
   label = "Period / Frequency",
   periodPs,
+  initialMode = "frequency",
   onChange,
 }: RateInputProps) {
-  const [mode, setMode] = useState<"period" | "frequency">("frequency");
+  const [mode, setMode] = useState<"period" | "frequency">(initialMode);
   const [periodUnit, setPeriodUnit] = useState<PeriodUnit>("ps");
   const [frequencyUnit, setFrequencyUnit] = useState<FrequencyUnit>("GHz");
   const labelId = useId();

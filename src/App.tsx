@@ -27,7 +27,6 @@ import {
   Grid2X2,
   GitBranch,
   Layers3,
-  PanelRightClose,
   PanelRightOpen,
   RotateCcw,
   ScanLine,
@@ -52,6 +51,11 @@ import {
 import { SignalTimingEditor } from "./components/SignalTimingEditor";
 import { BusEditor } from "./components/BusEditor";
 import { DerivedBusEditor } from "./components/DerivedBusEditor";
+import { Card, CardsMode } from "./features/inspector/InspectorCards";
+import { ChannelVisibility } from "./features/inspector/ChannelVisibility";
+import { BusSettings } from "./features/inspector/BusSettings";
+import { InspectorHeading } from "./features/inspector/InspectorHeading";
+import { SignalInspector } from "./features/inspector/SignalInspector";
 import { PropertyPanel } from "./features/inspector/PropertyPanel";
 import { DelayConsole } from "./features/delay-console/DelayConsole";
 import {
@@ -183,10 +187,11 @@ function App() {
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [isCanvasPanning, setIsCanvasPanning] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
-  const [pendingBusResize, setPendingBusResize] = useState<{ id: string; width: number; removed: number; links: number; constraints: number; derived: number } | null>(null);
+  const [pendingBusResize, setPendingBusResize] = useState<{ id: string; width: number; range?: Pick<Bus, "channelFirst" | "channelStep">; removed: number; links: number; constraints: number; derived: number } | null>(null);
   const [busEditorVersion, setBusEditorVersion] = useState(0);
   const [axisSelection, setAxisSelection] = useState<AxisSelection | null>(null);
   const [signalsPanelOpen, setSignalsPanelOpen] = useState(false);
+  const [managedBusId, setManagedBusId] = useState<string | null>(null);
   const [signalSearch, setSignalSearch] = useState("");
   const [newGroupName, setNewGroupName] = useState("");
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -198,6 +203,7 @@ function App() {
   useEffect(() => {
     if (snapshot.activity.startsWith("Agent ") || snapshot.activity === "Undo" || snapshot.activity === "Redo") {
       setStatusMessage(snapshot.activity);
+      setPatternResetVersion(version => version + 1);
     }
   }, [snapshot.activity, snapshot.revision]);
   const [delayConsoleOpen, setDelayConsoleOpen] = useState(false);
@@ -255,6 +261,7 @@ function App() {
       ),
     [normalizedSignalSearch, managerSignals],
   );
+  const managedBus = managedBusId ? busById.get(managedBusId) : undefined;
   const selectedBus = busById.get(selectedId);
   const selected = project.signals.find((signal) => signal.id === selectedId) ??
     (!selectedBus && !selectedId ? project.signals.find((signal) => signal.kind !== "data" || !signal.busId) : undefined);
@@ -751,39 +758,49 @@ function App() {
     setProject((current) => updateBusDefaults(current, id, patch));
   };
 
-  const resizeSelectedBus = (id: string, width: number) => {
+  const commitBusResize = (id: string, width: number, range?: Pick<Bus, "channelFirst" | "channelStep">) => {
+    setProject(current => {
+      const resized = resizeBus(current, id, width, palette.signal[0]);
+      return range ? updateBusDefaults(resized, id, range) : resized;
+    });
+  };
+
+  const resizeSelectedBus = (id: string, width: number, range?: Pick<Bus, "channelFirst" | "channelStep">) => {
+    const old = busById.get(id);
+    if (!old || !Number.isInteger(width) || width < 1 || width > 256) return;
+    if (width === old.width) {
+      if (range) updateBus(id, range);
+      return;
+    }
     if (busChannels(project, id).every(channel => isSequentialDataSignal(channel))) {
       setStatusMessage("Derived Bus width follows its input Bus");
       return;
     }
-    if (!Number.isInteger(width) || width < 1 || width > 256) return;
-    const old = busById.get(id);
-    if (!old || old.width === width) return;
     if (width < old.width) {
       const removed = new Set(busChannels(project, id).filter((signal) => (signal.busIndex ?? 0) >= width).map((signal) => signal.id));
       const links = (project.delayLinks ?? []).filter((link) => removed.has(link.sourceSignalId) || removed.has(link.targetSignalId)).length;
       const constraints = (project.timingConstraints ?? []).filter((item) => removed.has(item.sourceSignalId) || removed.has(item.targetSignalId)).length;
       const derived = project.signals.filter((signal) => isSequentialDataSignal(signal) &&
         (removed.has(signal.derivation.dataSignalId) || removed.has(signal.derivation.clockSignalId))).length;
-      setPendingBusResize({ id, width, removed: removed.size, links, constraints, derived });
+      setPendingBusResize({ id, width, range, removed: removed.size, links, constraints, derived });
       return;
     }
-    setProject((current) => resizeBus(current, id, width, palette.signal[0]));
+    commitBusResize(id, width, range);
     setStatusMessage(`${old.name} now has ${width} channels`);
   };
 
   const confirmBusResize = () => {
     if (!pendingBusResize) return;
-    const { id, width } = pendingBusResize;
+    const { id, width, range } = pendingBusResize;
     const name = busById.get(id)?.name ?? "Bus";
-    setProject((current) => resizeBus(current, id, width, palette.signal[0]));
+    commitBusResize(id, width, range);
     setStatusMessage(`${name} now has ${width} channels${pendingBusResize.derived ? ` · ${pendingBusResize.derived} derived signal(s) need a new source` : ""}`);
     setPendingBusResize(null);
   };
 
-  const applyPatternsToBus = (id: string, patterns: string[][], indexes: number[], replaceOverrides: boolean, generated: boolean) => {
+  const applyPatternsToBus = (id: string, patterns: string[][], indexes: number[], replaceOverrides: boolean, generated: boolean, rule?: Bus["rule"]) => {
     const selectedIndexes = new Map(indexes.map((index, position) => [index, patterns[position]]));
-    setProject((current) => applyBusPatterns(current, id, patterns, indexes, replaceOverrides, generated));
+    setProject((current) => applyBusPatterns(rule ? updateBusDefaults(current,id,{rule}) : current, id, patterns, indexes, replaceOverrides, generated));
     const skipped = busChannels(project, id).filter((signal) => selectedIndexes.has(signal.busIndex ?? -1) && signal.busOverrides?.pattern && !replaceOverrides).length;
     setStatusMessage(`${patterns.length - skipped} channels updated${skipped ? ` · ${skipped} local Pattern edits preserved` : ""}`);
   };
@@ -1406,7 +1423,7 @@ function App() {
               <div className="signal-manager-empty">No signals in this group</div>
             ) : (
               signals.map((signal) => (
-                <div className="signal-manager-row" key={signal.id}>
+                <div className={busById.has(signal.id) ? "signal-manager-row has-channels" : "signal-manager-row"} key={signal.id}>
                   <ActionIcon
                     variant="subtle"
                     color={signal.visible ? "violet" : "gray"}
@@ -1434,6 +1451,8 @@ function App() {
                     />
                     <span>{signal.name}</span>
                   </UnstyledButton>
+                  {busById.has(signal.id) && <Tooltip label="Channel visibility"><ActionIcon variant="subtle" size="sm"
+                    aria-label={`Channel visibility for ${signal.name}`} onClick={()=>setManagedBusId(signal.id)}><Layers3 size={14}/></ActionIcon></Tooltip>}
                   <Select
                     className="signal-group-select"
                     aria-label={`Group for ${signal.name}`}
@@ -1828,7 +1847,7 @@ function App() {
                     color="gray"
                     size="compact-sm"
                     leftSection={<Layers3 size={15} />}
-                    onClick={() => setSignalsPanelOpen((opened) => !opened)}
+                    onClick={() => { setManagedBusId(null); setSignalsPanelOpen((opened) => !opened); }}
                   >
                     Signals
                     {managerSignals.some((signal) => !signal.visible) &&
@@ -1836,6 +1855,10 @@ function App() {
                   </Button>
                 </Popover.Target>
                 <Popover.Dropdown className="signals-panel">
+                  {managedBus ? <>
+                    <Button size="compact-xs" variant="subtle" onClick={()=>setManagedBusId(null)}>‹ Signal manager</Button>
+                    <ChannelVisibility key={managedBus.id} bus={managedBus} onChange={patch=>updateBus(managedBus.id,patch)}/>
+                  </> : <>
                   <div className="signals-panel-heading">
                     <div>
                       <strong>Signal manager</strong>
@@ -1911,6 +1934,7 @@ function App() {
                       Group
                     </Button>
                   </div>
+                  </>}
                 </Popover.Dropdown>
               </Popover>
 
@@ -2916,19 +2940,24 @@ function App() {
             </Tooltip>
           </aside>
         )}
-        {inspectorOpen && selectedBus && <aside className="property-panel"><div className="panel-heading property-heading"><div><span className="eyebrow">INSPECTOR</span><h2>Bus properties</h2></div><ActionIcon variant="subtle" aria-label="Collapse properties" onClick={() => setInspectorOpen(false)}><PanelRightClose size={16} /></ActionIcon></div><div className="property-content"><BusEditor key={`${selectedBus.id}-${busEditorVersion}`} bus={selectedBus} channels={busChannels(project, selectedBus.id)} referencePeriodPs={referencePeriodPs}
-          onChange={(patch) => updateBus(selectedBus.id, patch)}
-          onResize={(width) => resizeSelectedBus(selectedBus.id, width)}
-          onApplyPatterns={(patterns, indexes, replaceOverrides, generated) => applyPatternsToBus(selectedBus.id, patterns, indexes, replaceOverrides, generated)}
-        />
-          {constraintTarget && <SignalTimingEditor busTarget selected={constraintTarget} signals={project.signals.filter(signal => signal.kind !== "data" || signal.busId !== selectedBus.id)}
+        {inspectorOpen && selectedBus && <aside className="property-panel" aria-label="Bus inspector">
+          <InspectorHeading bus={selectedBus} derived={busChannels(project, selectedBus.id).every(isSequentialDataSignal)}
+            select={setSelectedId} collapse={()=>setInspectorOpen(false)} rename={name=>updateBus(selectedBus.id,{name})}/>
+          <CardsMode.Provider value><div className="pro-content card-stack" key={snapshot.sessionId + selectedBus.id}>
+          <BusSettings key={busEditorVersion} bus={selectedBus} channels={busChannels(project, selectedBus.id)} referencePeriodPs={referencePeriodPs} expanded
+            select={setSelectedId} openManager={()=>{setManagedBusId(selectedBus.id);setSignalsPanelOpen(true);}}
+            onChange={patch=>updateBus(selectedBus.id,patch)}
+            onResize={width=>resizeSelectedBus(selectedBus.id,width)}
+            setRange={(first,last)=>resizeSelectedBus(selectedBus.id,Math.abs(last-first)+1,{channelFirst:first,channelStep:first<=last?1:-1})}
+            onApplyPatterns={(rows,indexes,replace,generated,rule)=>applyPatternsToBus(selectedBus.id,rows,indexes,replace,generated,rule)}/>
+          {constraintTarget && <Card title="Timing relationships" note="Check setup and hold against each channel’s actual edges."><SignalTimingEditor busTarget selected={constraintTarget} signals={project.signals.filter(signal => signal.kind !== "data" || signal.busId !== selectedBus.id)}
             durationPs={project.durationPs} constraint={selectedConstraint}
             edgeTimes={(signal, polarity) => resolvedProjectTiming.edgeTimes(signal.id, polarity)}
             onAddConstraint={addSelectedConstraint} onChangeConstraint={updateSelectedConstraint}
             onRemoveConstraint={() => setProject(current => ({ ...current, timingConstraints: current.timingConstraints?.filter(item => item.id !== selectedConstraint?.id) }))}
-            onAddDelay={() => {}} onChangeDelay={() => {}} onRemoveDelay={() => {}} />}
-        </div></aside>}
-        {inspectorOpen && !selectedBus && <PropertyPanel
+            onAddDelay={() => {}} onChangeDelay={() => {}} onRemoveDelay={() => {}} /></Card>}
+        </div></CardsMode.Provider></aside>}
+        {inspectorOpen && !selectedBus && <SignalInspector key={snapshot.sessionId} select={setSelectedId}
           onCollapse={() => setInspectorOpen(false)}
           project={project}
           selected={selected}
